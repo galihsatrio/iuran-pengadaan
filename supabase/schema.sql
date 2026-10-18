@@ -15,6 +15,7 @@ create table if not exists public.iuran (
     created_at timestamptz not null default now(),
     nama_blok text not null check (char_length(trim(nama_blok)) > 0 and char_length(nama_blok) <= 50),
     nomor_blok text not null check (char_length(trim(nomor_blok)) > 0 and char_length(nomor_blok) <= 20),
+    nama_kepala_keluarga text not null check (char_length(trim(nama_kepala_keluarga)) > 0 and char_length(nama_kepala_keluarga) <= 100),
     amount bigint not null check (amount > 0),
     created_by uuid references auth.users(id) default auth.uid()
 );
@@ -53,4 +54,134 @@ with check (
     )
 );
 
--- TIDAK ADA policy UPDATE atau DELETE (hanya insert dan read sesuai spesifikasi).
+-- Pengurus allowlist dapat memperbarui data iuran (UPDATE)
+create policy "Only allowlisted pengurus can update iuran"
+on public.iuran
+for update
+to authenticated
+using (
+    exists (
+        select 1 from public.pengurus_allowlist
+        where pengurus_allowlist.user_id = auth.uid()
+    )
+)
+with check (
+    exists (
+        select 1 from public.pengurus_allowlist
+        where pengurus_allowlist.user_id = auth.uid()
+    )
+);
+
+-- Pengurus allowlist dapat menghapus data iuran (DELETE)
+create policy "Only allowlisted pengurus can delete iuran"
+on public.iuran
+for delete
+to authenticated
+using (
+    exists (
+        select 1 from public.pengurus_allowlist
+        where pengurus_allowlist.user_id = auth.uid()
+    )
+);
+
+-- 7. Supabase Storage: Bucket & Kebijakan untuk Aset Pembayaran (QRIS)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+    'payment-assets',
+    'payment-assets',
+    true,
+    2097152, -- 2MB
+    array['image/png', 'image/jpeg', 'image/webp']
+)
+on conflict (id) do update set
+    public = true,
+    file_size_limit = 2097152,
+    allowed_mime_types = array['image/png', 'image/jpeg', 'image/webp'];
+
+create policy "Public can view payment assets"
+on storage.objects
+for select
+to anon, authenticated
+using (bucket_id = 'payment-assets');
+
+create policy "Only allowlisted pengurus can upload payment assets"
+on storage.objects
+for insert
+to authenticated
+with check (
+    bucket_id = 'payment-assets'
+    and exists (
+        select 1 from public.pengurus_allowlist
+        where pengurus_allowlist.user_id = auth.uid()
+    )
+);
+
+create policy "Only allowlisted pengurus can update payment assets"
+on storage.objects
+for update
+to authenticated
+using (
+    bucket_id = 'payment-assets'
+    and exists (
+        select 1 from public.pengurus_allowlist
+        where pengurus_allowlist.user_id = auth.uid()
+    )
+)
+with check (
+    bucket_id = 'payment-assets'
+    and exists (
+        select 1 from public.pengurus_allowlist
+        where pengurus_allowlist.user_id = auth.uid()
+    )
+);
+
+create policy "Only allowlisted pengurus can delete payment assets"
+on storage.objects
+for delete
+to authenticated
+using (
+    bucket_id = 'payment-assets'
+    and exists (
+        select 1 from public.pengurus_allowlist
+        where pengurus_allowlist.user_id = auth.uid()
+    )
+);
+
+
+-- 6. Tabel Pengaturan Pembayaran (Payment Settings & QRIS)
+create table if not exists public.payment_settings (
+    id text primary key default 'default',
+    qris_image_url text,
+    qris_name text not null default 'QRIS Pembayaran Iuran Warga',
+    bank_name text,
+    account_number text,
+    account_name text,
+    updated_at timestamptz not null default now(),
+    updated_by uuid references auth.users(id)
+);
+
+alter table public.payment_settings enable row level security;
+
+create policy "Public can read payment settings"
+on public.payment_settings
+for select
+to anon, authenticated
+using (true);
+
+create policy "Only allowlisted pengurus can manage payment settings"
+on public.payment_settings
+for all
+to authenticated
+using (
+    exists (
+        select 1 from public.pengurus_allowlist
+        where pengurus_allowlist.user_id = auth.uid()
+    )
+)
+with check (
+    exists (
+        select 1 from public.pengurus_allowlist
+        where pengurus_allowlist.user_id = auth.uid()
+    )
+);
+

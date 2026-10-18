@@ -4,6 +4,7 @@ export interface ValidationResult {
   sanitized?: {
     nama_blok: string;
     nomor_blok: string;
+    nama_kepala_keluarga: string;
     amount: number;
   };
 }
@@ -12,12 +13,15 @@ export interface ValidationResult {
 export function validateIuranInput(data: {
   nama_blok?: unknown;
   nomor_blok?: unknown;
+  nama_kepala_keluarga?: unknown;
   amount?: unknown;
 }): ValidationResult {
   const errors: Record<string, string> = {};
 
   const nama_blok = typeof data.nama_blok === "string" ? data.nama_blok.trim() : "";
   const nomor_blok = typeof data.nomor_blok === "string" ? data.nomor_blok.trim() : "";
+  const nama_kepala_keluarga =
+    typeof data.nama_kepala_keluarga === "string" ? data.nama_kepala_keluarga.trim() : "";
   const rawAmount = typeof data.amount === "string" ? data.amount.trim() : data.amount;
 
   if (!nama_blok) {
@@ -30,6 +34,12 @@ export function validateIuranInput(data: {
     errors.nomor_blok = "Nomor blok wajib diisi.";
   } else if (nomor_blok.length > 20) {
     errors.nomor_blok = "Nomor blok maksimal 20 karakter.";
+  }
+
+  if (!nama_kepala_keluarga) {
+    errors.nama_kepala_keluarga = "Nama kepala keluarga wajib diisi.";
+  } else if (nama_kepala_keluarga.length > 100) {
+    errors.nama_kepala_keluarga = "Nama kepala keluarga maksimal 100 karakter.";
   }
 
   const numAmount = Number(rawAmount);
@@ -51,6 +61,7 @@ export function validateIuranInput(data: {
     sanitized: {
       nama_blok,
       nomor_blok,
+      nama_kepala_keluarga,
       amount: numAmount,
     },
   };

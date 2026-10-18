@@ -3,8 +3,12 @@ import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { formatIDR, formatDateID } from "@/lib/format";
+import { getPaymentSettings } from "@/lib/payment-settings";
 import ContributionForm from "./contribution-form";
+import IuranRowActions from "./row-actions";
+import QrisUploadSection from "./qris-upload-section";
 import { logoutAction } from "./actions";
+
 import type { IuranRecord } from "@/lib/types";
 
 export const instant = false;
@@ -99,7 +103,7 @@ export default async function PengurusPage() {
   // Ambil daftar iuran
   const { data: iuranData } = await supabase
     .from("iuran")
-    .select("id, nama_blok, nomor_blok, amount, created_at")
+    .select("id, nama_blok, nomor_blok, nama_kepala_keluarga, amount, created_at")
     .order("created_at", { ascending: false });
 
   const records = (iuranData as IuranRecord[]) || [];
@@ -107,6 +111,8 @@ export default async function PengurusPage() {
     (sum, r) => sum + Number(r.amount || 0),
     0
   );
+
+  const paymentSettings = await getPaymentSettings(supabase);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
@@ -151,6 +157,11 @@ export default async function PengurusPage() {
 
       {/* Main Container */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+        {/* QRIS & Payment Settings Section */}
+        <section aria-label="Pengaturan QRIS Pembayaran">
+          <QrisUploadSection initialSettings={paymentSettings} />
+        </section>
+
         {/* Form Section */}
         <section aria-labelledby="form-heading">
           <ContributionForm />
@@ -199,11 +210,17 @@ export default async function PengurusPage() {
                     <th scope="col" className="py-2.5 px-4">
                       Nomor Blok
                     </th>
+                    <th scope="col" className="py-2.5 px-4">
+                      Nama Kepala Keluarga
+                    </th>
                     <th scope="col" className="py-2.5 px-4 text-right">
                       Jumlah Iuran
                     </th>
                     <th scope="col" className="py-2.5 px-4 text-right">
                       Waktu Dicatat
+                    </th>
+                    <th scope="col" className="py-2.5 px-4 text-center w-20">
+                      Opsi
                     </th>
                   </tr>
                 </thead>
@@ -222,11 +239,17 @@ export default async function PengurusPage() {
                       <td className="py-2.5 px-4 text-slate-600">
                         {item.nomor_blok}
                       </td>
+                      <td className="py-2.5 px-4 text-slate-800 font-medium">
+                        {item.nama_kepala_keluarga || "-"}
+                      </td>
                       <td className="py-2.5 px-4 text-right font-semibold text-emerald-700">
                         {formatIDR(item.amount)}
                       </td>
                       <td className="py-2.5 px-4 text-right text-xs text-slate-500">
                         {formatDateID(item.created_at)}
+                      </td>
+                      <td className="py-2.5 px-4 text-center">
+                        <IuranRowActions record={item} />
                       </td>
                     </tr>
                   ))}

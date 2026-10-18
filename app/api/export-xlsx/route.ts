@@ -25,7 +25,7 @@ export async function GET() {
   // Public read only required fields; no private/internal fields exposed
   const { data, error } = await supabase
     .from("iuran")
-    .select("id, nama_blok, nomor_blok, amount, created_at")
+    .select("id, nama_blok, nomor_blok, nama_kepala_keluarga, amount, created_at")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -41,6 +41,7 @@ export async function GET() {
     No: index + 1,
     "Nama Blok": item.nama_blok,
     "Nomor Blok": item.nomor_blok,
+    "Nama Kepala Keluarga": item.nama_kepala_keluarga || "-",
     "Jumlah (Rp)": item.amount,
     "Waktu Pencatatan": formatDateID(item.created_at),
   }));
@@ -51,7 +52,8 @@ export async function GET() {
   rows.push({
     No: 0,
     "Nama Blok": "",
-    "Nomor Blok": "TOTAL TERKUMPUL",
+    "Nomor Blok": "",
+    "Nama Kepala Keluarga": "TOTAL TERKUMPUL",
     "Jumlah (Rp)": totalAmount,
     "Waktu Pencatatan": "",
   });
@@ -63,6 +65,7 @@ export async function GET() {
     { wch: 6 },
     { wch: 18 },
     { wch: 18 },
+    { wch: 26 },
     { wch: 18 },
     { wch: 24 },
   ];

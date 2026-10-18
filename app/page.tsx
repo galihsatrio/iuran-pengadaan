@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { formatIDR, formatDateID } from "@/lib/format";
+import { getPaymentSettings } from "@/lib/payment-settings";
+import QrisPreviewToggle from "@/components/qris-preview";
 import type { IuranRecord } from "@/lib/types";
+
 
 // ponytail: Direct server component query wrapped in Suspense for instant static shell streaming. Upgrade to pagination if records exceed 200 items.
 async function IuranContent() {
@@ -19,7 +23,7 @@ async function IuranContent() {
       // Public warga query: only requested public fields, no secret/auth fields
       const { data, error } = await supabase
         .from("iuran")
-        .select("id, nama_blok, nomor_blok, amount, created_at")
+        .select("id, nama_blok, nomor_blok, nama_kepala_keluarga, amount, created_at")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -139,6 +143,9 @@ async function IuranContent() {
                   <th scope="col" className="py-3 px-4">
                     Nomor Blok
                   </th>
+                  <th scope="col" className="py-3 px-4">
+                    Nama Kepala Keluarga
+                  </th>
                   <th scope="col" className="py-3 px-4 text-right">
                     Jumlah Iuran
                   </th>
@@ -162,6 +169,9 @@ async function IuranContent() {
                     <td className="py-3 px-4 text-slate-600">
                       {item.nomor_blok}
                     </td>
+                    <td className="py-3 px-4 text-slate-800 font-medium">
+                      {item.nama_kepala_keluarga || "-"}
+                    </td>
                     <td className="py-3 px-4 text-right font-semibold text-emerald-700">
                       {formatIDR(item.amount)}
                     </td>
@@ -173,7 +183,7 @@ async function IuranContent() {
               </tbody>
               <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
                 <tr>
-                  <td colSpan={3} className="py-3 px-4 text-right text-slate-700">
+                  <td colSpan={4} className="py-3 px-4 text-right text-slate-700">
                     Total Terkumpul:
                   </td>
                   <td className="py-3 px-4 text-right text-emerald-700">
@@ -226,6 +236,60 @@ function IuranSkeleton() {
         </div>
       </section>
     </>
+  );
+}
+
+function PaymentInfoSkeleton() {
+  return (
+    <section
+      aria-label="Memuat Informasi Pembayaran"
+      className="mb-8 bg-white rounded-xl border border-slate-200 p-5 sm:p-6 shadow-xs animate-pulse"
+    >
+      <div className="h-4 w-32 bg-slate-200 rounded mb-2"></div>
+      <div className="h-6 w-56 bg-slate-200 rounded mb-2"></div>
+      <div className="h-4 w-80 bg-slate-200 rounded mb-4"></div>
+      <div className="h-10 w-full sm:w-96 bg-slate-200 rounded"></div>
+    </section>
+  );
+}
+
+async function PaymentInfoSection() {
+  await connection();
+  const configured = isSupabaseConfigured();
+  const supabase = configured ? await getServerSupabase() : null;
+  const paymentSettings = await getPaymentSettings(supabase);
+
+  return (
+    <section
+      aria-labelledby="payment-info-heading"
+      className="mb-8 bg-white rounded-xl border border-slate-200 p-5 sm:p-6 shadow-xs"
+    >
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="flex-1">
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700">
+            Informasi Pembayaran
+          </span>
+          <h2
+            id="payment-info-heading"
+            className="mt-1.5 text-base sm:text-lg font-bold text-slate-900"
+          >
+            Metode Penyaluran Iuran Warga
+          </h2>
+          <p className="mt-1 text-xs sm:text-sm text-slate-600">
+            Warga dapat menyalurkan iuran pengadaan portal secara tunai ke pengurus atau melalui transfer bank / kode QRIS resmi.
+          </p>
+        </div>
+
+        {paymentSettings.qris_image_url && (
+          <div className="w-full sm:w-auto shrink-0 self-start sm:self-center">
+            <QrisPreviewToggle
+              imageUrl={paymentSettings.qris_image_url}
+              name={paymentSettings.qris_name}
+            />
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -291,9 +355,15 @@ export default function HomePage() {
           </div>
         )}
 
+        {/* Informasi Pembayaran & QRIS */}
+        <Suspense fallback={<PaymentInfoSkeleton />}>
+          <PaymentInfoSection />
+        </Suspense>
+
         <Suspense fallback={<IuranSkeleton />}>
           <IuranContent />
         </Suspense>
+
 
         <footer className="mt-12 text-center text-xs text-slate-400 pb-8">
           Sistem Informasi Iuran Swadaya Warga &bull; Next.js + Supabase
