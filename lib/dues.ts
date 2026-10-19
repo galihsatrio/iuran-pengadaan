@@ -11,6 +11,15 @@ export interface ResidentDuesStatus {
   outstandingBalance: number;
 }
 
+export interface ResidentExcessDonation {
+  residentKey: string;
+  namaBlok: string;
+  nomorBlok: string;
+  namaKepalaKeluarga: string;
+  cumulativePaid: number;
+  excessAmount: number;
+}
+
 // ponytail: Calculate resident stage from cumulative paid amount. Target Rp75.000, 3 stages of Rp25.000. Upgrade to dynamic stages if config is moved to DB.
 export function calculateResidentDuesStatus(totalPaid: number): ResidentDuesStatus {
   const safeTotal = Math.max(0, Number(totalPaid) || 0);
@@ -77,4 +86,64 @@ export function sortRecordsByCumulativePaidDesc<T extends { nama_blok: string; n
     })
     .map(({ item }) => item);
 }
+
+// ponytail: Calculate resident voluntary excess (donations) beyond cumulative dues target of Rp75.000. Upgrade to dynamic threshold parameter if dues target becomes configurable in DB.
+export function calculateResidentExcessDonations<
+  T extends { nama_blok: string; nomor_blok: string; nama_kepala_keluarga?: string | null; amount: number }
+>(records: T[], target = DUES_TARGET): ResidentExcessDonation[] {
+  const residentMap = new Map<
+    string,
+    {
+      namaBlok: string;
+      nomorBlok: string;
+      namaKepalaKeluarga: string;
+      cumulativePaid: number;
+    }
+  >();
+
+  for (const r of records) {
+    const key = getResidentKey(r);
+    const existing = residentMap.get(key);
+    const amount = Number(r.amount) || 0;
+
+    if (!existing) {
+      residentMap.set(key, {
+        namaBlok: (r.nama_blok || "").trim(),
+        nomorBlok: (r.nomor_blok || "").trim(),
+        namaKepalaKeluarga: (r.nama_kepala_keluarga || "").trim(),
+        cumulativePaid: amount,
+      });
+    } else {
+      existing.cumulativePaid += amount;
+      if (!existing.namaKepalaKeluarga && r.nama_kepala_keluarga) {
+        existing.namaKepalaKeluarga = r.nama_kepala_keluarga.trim();
+      }
+    }
+  }
+
+  const donations: ResidentExcessDonation[] = [];
+  for (const [residentKey, data] of residentMap.entries()) {
+    if (data.cumulativePaid > target) {
+      donations.push({
+        residentKey,
+        namaBlok: data.namaBlok,
+        nomorBlok: data.nomorBlok,
+        namaKepalaKeluarga: data.namaKepalaKeluarga,
+        cumulativePaid: data.cumulativePaid,
+        excessAmount: data.cumulativePaid - target,
+      });
+    }
+  }
+
+  // Sort donations by highest excess amount first, then stable alphabetical
+  return donations.sort((a, b) => {
+    if (b.excessAmount !== a.excessAmount) {
+      return b.excessAmount - a.excessAmount;
+    }
+    const blokComp = a.namaBlok.localeCompare(b.namaBlok, "id", { numeric: true });
+    if (blokComp !== 0) return blokComp;
+    return a.nomorBlok.localeCompare(b.nomorBlok, "id", { numeric: true });
+  });
+}
+
 

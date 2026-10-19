@@ -22,6 +22,8 @@ export interface PaymentSettings {
   bank_name?: string;
   account_number?: string;
   account_name?: string;
+  show_expenses_on_home?: boolean;
+  show_donations_on_home?: boolean;
   updated_at?: string | null;
 }
 
@@ -42,5 +44,50 @@ export interface TreasurerInput {
   wa_number: string;
   is_active: boolean;
 }
+
+export interface PublicExpense {
+  id: number;
+  date: string;
+  description: string;
+  amount: number;
+}
+
+export interface ExpenseRecord extends PublicExpense {
+  receipt_path: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by?: string | null;
+  updated_by?: string | null;
+}
+
+export interface ExpenseInput {
+  date: string;
+  description: string;
+  amount: number;
+}
+
+export type GalleryCategory = "kegiatan" | "hasil";
+
+export interface PublicGalleryItem {
+  id: number;
+  title: string;
+  category: GalleryCategory;
+  caption: string | null;
+  image_url: string;
+  created_at: string;
+}
+
+export interface GalleryItem extends PublicGalleryItem {
+  storage_path: string;
+  created_by?: string | null;
+}
+
+export interface GalleryInput {
+  title: string;
+  category: GalleryCategory;
+  caption?: string | null;
+}
+
+
 
 

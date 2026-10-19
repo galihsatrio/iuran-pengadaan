@@ -18,6 +18,24 @@ export function formatDateID(dateString: string): string {
   }
 }
 
+export function formatDateOnlyID(dateString: string): string {
+  try {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      const [year, month, day] = dateString.split("-").map(Number);
+      const d = new Date(year, month - 1, day);
+      return new Intl.DateTimeFormat("id-ID", {
+        dateStyle: "medium",
+      }).format(d);
+    }
+    const d = new Date(dateString);
+    return new Intl.DateTimeFormat("id-ID", {
+      dateStyle: "medium",
+    }).format(d);
+  } catch {
+    return dateString;
+  }
+}
+
 // ponytail: Normalize Indonesian WhatsApp phone numbers to international standard without '+' for wa.me links
 export function normalizeWhatsAppNumber(phone?: string | null): string {
   if (!phone) return "";

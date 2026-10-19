@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PaymentSettings } from "./types";
 
 export const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
+export const MAX_GALLERY_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 
 export const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
   qris_image_url: "",
@@ -11,6 +12,8 @@ export const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
   bank_name: "Bank BCA",
   account_number: "123-456-7890",
   account_name: "Kas Paguyuban Warga",
+  show_expenses_on_home: true,
+  show_donations_on_home: true,
   updated_at: null,
 };
 
@@ -24,7 +27,7 @@ export async function getPaymentSettings(
   try {
     const { data, error } = await client
       .from("payment_settings")
-      .select("qris_image_url, qris_name, nama_bendahara, no_wa_bendahara, bank_name, account_number, account_name, updated_at")
+      .select("qris_image_url, qris_name, nama_bendahara, no_wa_bendahara, bank_name, account_number, account_name, show_expenses_on_home, show_donations_on_home, updated_at")
       .eq("id", "default")
       .maybeSingle();
 
@@ -37,6 +40,14 @@ export async function getPaymentSettings(
         bank_name: data.bank_name ?? DEFAULT_PAYMENT_SETTINGS.bank_name,
         account_number: data.account_number ?? DEFAULT_PAYMENT_SETTINGS.account_number,
         account_name: data.account_name ?? DEFAULT_PAYMENT_SETTINGS.account_name,
+        show_expenses_on_home:
+          typeof data.show_expenses_on_home === "boolean"
+            ? data.show_expenses_on_home
+            : DEFAULT_PAYMENT_SETTINGS.show_expenses_on_home,
+        show_donations_on_home:
+          typeof data.show_donations_on_home === "boolean"
+            ? data.show_donations_on_home
+            : DEFAULT_PAYMENT_SETTINGS.show_donations_on_home,
         updated_at: data.updated_at ?? null,
       };
     }
@@ -70,6 +81,14 @@ export async function savePaymentSettings(
       bank_name: updates.bank_name !== undefined ? updates.bank_name : current.bank_name,
       account_number: updates.account_number !== undefined ? updates.account_number : current.account_number,
       account_name: updates.account_name !== undefined ? updates.account_name : current.account_name,
+      show_expenses_on_home:
+        updates.show_expenses_on_home !== undefined
+          ? updates.show_expenses_on_home
+          : (current.show_expenses_on_home ?? DEFAULT_PAYMENT_SETTINGS.show_expenses_on_home),
+      show_donations_on_home:
+        updates.show_donations_on_home !== undefined
+          ? updates.show_donations_on_home
+          : (current.show_donations_on_home ?? DEFAULT_PAYMENT_SETTINGS.show_donations_on_home),
       updated_at: new Date().toISOString(),
     };
 
@@ -80,7 +99,7 @@ export async function savePaymentSettings(
     const { data, error } = await client
       .from("payment_settings")
       .upsert(merged, { onConflict: "id" })
-      .select("qris_image_url, qris_name, nama_bendahara, no_wa_bendahara, bank_name, account_number, account_name, updated_at")
+      .select("qris_image_url, qris_name, nama_bendahara, no_wa_bendahara, bank_name, account_number, account_name, show_expenses_on_home, show_donations_on_home, updated_at")
       .single();
 
     if (error) {
@@ -109,15 +128,19 @@ export interface ImageValidationResult {
   mimeType?: string;
 }
 
-export function validateImageBuffer(buffer: Buffer): ImageValidationResult {
+export function validateImageBuffer(
+  buffer: Buffer,
+  maxSizeBytes: number = MAX_FILE_SIZE_BYTES
+): ImageValidationResult {
   if (!buffer || buffer.length === 0) {
     return { valid: false, error: "Berkas gambar tidak boleh kosong." };
   }
 
-  if (buffer.length > MAX_FILE_SIZE_BYTES) {
+  if (buffer.length > maxSizeBytes) {
+    const mbLimit = Math.round(maxSizeBytes / (1024 * 1024));
     return {
       valid: false,
-      error: "Ukuran berkas melebihi batas maksimal 2MB.",
+      error: `Ukuran berkas melebihi batas maksimal ${mbLimit}MB.`,
     };
   }
 

@@ -172,6 +172,24 @@ export default async function PengurusPage() {
           >
             Master Bendahara &amp; QRIS
           </Link>
+          <Link
+            href="/pengurus/pengeluaran"
+            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px] flex items-center"
+          >
+            Pengeluaran Kas
+          </Link>
+          <Link
+            href="/pengurus/galeri"
+            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px] flex items-center"
+          >
+            Galeri Kegiatan
+          </Link>
+          <Link
+            href="/pengurus/pengaturan"
+            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px] flex items-center"
+          >
+            Pengaturan
+          </Link>
         </div>
       </div>
 

@@ -18,6 +18,103 @@ export interface BendaharaValidationResult {
   };
 }
 
+export interface HomeExpensesSettingValidationResult {
+  valid: boolean;
+  errors: Record<string, string>;
+  sanitized?: {
+    show_expenses_on_home: boolean;
+  };
+}
+
+export interface HomeVisibilitySettingsValidationResult {
+  valid: boolean;
+  errors: Record<string, string>;
+  sanitized?: {
+    show_expenses_on_home?: boolean;
+    show_donations_on_home?: boolean;
+  };
+}
+
+function parseBooleanField(raw: unknown): boolean | null {
+  if (typeof raw === "boolean") return raw;
+  if (raw === "true" || raw === "on" || raw === "1") return true;
+  if (raw === "false" || raw === "off" || raw === "0" || raw === "") return false;
+  return null;
+}
+
+export function validateHomeVisibilitySettingsInput(data: {
+  show_expenses_on_home?: unknown;
+  show_donations_on_home?: unknown;
+}): HomeVisibilitySettingsValidationResult {
+  const errors: Record<string, string> = {};
+  const sanitized: { show_expenses_on_home?: boolean; show_donations_on_home?: boolean } = {};
+
+  if (data.show_expenses_on_home !== undefined) {
+    const parsed = parseBooleanField(data.show_expenses_on_home);
+    if (parsed === null) {
+      errors.show_expenses_on_home = "Nilai pengaturan visibilitas pengeluaran tidak valid.";
+    } else {
+      sanitized.show_expenses_on_home = parsed;
+    }
+  }
+
+  if (data.show_donations_on_home !== undefined) {
+    const parsed = parseBooleanField(data.show_donations_on_home);
+    if (parsed === null) {
+      errors.show_donations_on_home = "Nilai pengaturan visibilitas sumbangan tidak valid.";
+    } else {
+      sanitized.show_donations_on_home = parsed;
+    }
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return { valid: false, errors };
+  }
+
+  if (Object.keys(sanitized).length === 0) {
+    return {
+      valid: false,
+      errors: { _general: "Setidaknya satu pengaturan visibilitas harus disediakan." },
+    };
+  }
+
+  return {
+    valid: true,
+    errors: {},
+    sanitized,
+  };
+}
+
+export function validateHomeExpensesSettingInput(data: {
+  show_expenses_on_home?: unknown;
+}): HomeExpensesSettingValidationResult {
+  const errors: Record<string, string> = {};
+  const raw = data.show_expenses_on_home;
+
+  let parsed: boolean | null = null;
+  if (typeof raw === "boolean") {
+    parsed = raw;
+  } else if (raw === "true" || raw === "on" || raw === "1") {
+    parsed = true;
+  } else if (raw === "false" || raw === "off" || raw === "0" || raw === "") {
+    parsed = false;
+  } else {
+    errors.show_expenses_on_home = "Nilai pengaturan visibilitas tidak valid.";
+  }
+
+  if (Object.keys(errors).length > 0 || parsed === null) {
+    return { valid: false, errors };
+  }
+
+  return {
+    valid: true,
+    errors: {},
+    sanitized: {
+      show_expenses_on_home: parsed,
+    },
+  };
+}
+
 export interface TreasurerValidationResult {
   valid: boolean;
   errors: Record<string, string>;
@@ -25,6 +122,126 @@ export interface TreasurerValidationResult {
     name: string;
     wa_number: string;
     is_active: boolean;
+  };
+}
+
+export interface ExpenseValidationResult {
+  valid: boolean;
+  errors: Record<string, string>;
+  sanitized?: {
+    date: string;
+    description: string;
+    amount: number;
+  };
+}
+
+export interface GalleryValidationResult {
+  valid: boolean;
+  errors: Record<string, string>;
+  sanitized?: {
+    title: string;
+    category: "kegiatan" | "hasil";
+    caption: string | null;
+  };
+}
+
+export function validateGalleryInput(data: {
+  title?: unknown;
+  category?: unknown;
+  caption?: unknown;
+}): GalleryValidationResult {
+  const errors: Record<string, string> = {};
+
+  const rawTitle = typeof data.title === "string" ? data.title.trim() : "";
+  const rawCategory = typeof data.category === "string" ? data.category.trim().toLowerCase() : "";
+  const rawCaption = typeof data.caption === "string" ? data.caption.trim() : "";
+
+  if (!rawTitle) {
+    errors.title = "Judul foto wajib diisi.";
+  } else if (rawTitle.length > 150) {
+    errors.title = "Judul foto maksimal 150 karakter.";
+  }
+
+  if (!rawCategory) {
+    errors.category = "Kategori foto wajib dipilih.";
+  } else if (rawCategory !== "kegiatan" && rawCategory !== "hasil") {
+    errors.category = "Kategori foto harus 'kegiatan' atau 'hasil'.";
+  }
+
+  if (rawCaption && rawCaption.length > 500) {
+    errors.caption = "Keterangan foto maksimal 500 karakter.";
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return { valid: false, errors };
+  }
+
+  return {
+    valid: true,
+    errors: {},
+    sanitized: {
+      title: rawTitle,
+      category: rawCategory as "kegiatan" | "hasil",
+      caption: rawCaption || null,
+    },
+  };
+}
+
+export function validateExpenseInput(data: {
+  date?: unknown;
+  description?: unknown;
+  amount?: unknown;
+}): ExpenseValidationResult {
+  const errors: Record<string, string> = {};
+
+  const rawDate = typeof data.date === "string" ? data.date.trim() : "";
+  const rawDesc = typeof data.description === "string" ? data.description.trim() : "";
+  const rawAmount = typeof data.amount === "string" ? data.amount.trim() : data.amount;
+
+  if (!rawDate) {
+    errors.date = "Tanggal pengeluaran wajib diisi.";
+  } else if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    errors.date = "Format tanggal harus YYYY-MM-DD (contoh: 2025-10-19).";
+  } else {
+    const [y, m, d] = rawDate.split("-").map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    if (
+      isNaN(dateObj.getTime()) ||
+      dateObj.getFullYear() !== y ||
+      dateObj.getMonth() !== m - 1 ||
+      dateObj.getDate() !== d
+    ) {
+      errors.date = "Tanggal kalender tidak valid.";
+    }
+  }
+
+  if (!rawDesc) {
+    errors.description = "Keterangan pengeluaran wajib diisi.";
+  } else if (rawDesc.length > 255) {
+    errors.description = "Keterangan pengeluaran maksimal 255 karakter.";
+  }
+
+  const numAmount = Number(rawAmount);
+  if (rawAmount === undefined || rawAmount === null || rawAmount === "") {
+    errors.amount = "Nominal pengeluaran wajib diisi.";
+  } else if (isNaN(numAmount) || !Number.isInteger(numAmount) || numAmount <= 0) {
+    errors.amount = "Nominal pengeluaran harus berupa bilangan bulat positif (contoh: 50000).";
+  } else if (numAmount > 1_000_000_000) {
+    errors.amount = "Nominal pengeluaran melebihi batas wajar (maksimal Rp 1.000.000.000).";
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return { valid: false, errors };
+  }
+
+  return {
+    valid: true,
+    errors: {},
+    sanitized: {
+      date: rawDate,
+      description: rawDesc,
+      amount: numAmount,
+    },
   };
 }
 

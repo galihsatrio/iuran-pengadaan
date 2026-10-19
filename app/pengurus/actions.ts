@@ -4,12 +4,14 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { validateIuranInput, validateBendaharaInput, validateTreasurerInput } from "@/lib/validation";
+import { validateIuranInput, validateBendaharaInput, validateTreasurerInput, validateExpenseInput, validateGalleryInput, validateHomeExpensesSettingInput, validateHomeVisibilitySettingsInput } from "@/lib/validation";
 import {
   validateImageBuffer,
   MAX_FILE_SIZE_BYTES,
+  MAX_GALLERY_FILE_SIZE_BYTES,
   savePaymentSettings,
 } from "@/lib/payment-settings";
+import { GALLERY_STORAGE_BUCKET } from "@/lib/gallery";
 
 
 export type ActionResult = {
@@ -527,6 +529,200 @@ export async function updateBendaharaAction(
   };
 }
 
+// ponytail: Update home expenses visibility toggle in payment_settings with allowlist check & revalidation.
+export async function updateHomeExpensesVisibilityAction(
+  prevState: ActionResult | null,
+  formData: FormData
+): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) {
+    return {
+      success: false,
+      message: "Konfigurasi Supabase belum terpasang di server.",
+    };
+  }
+
+  const supabase = await getServerSupabase();
+  if (!supabase) {
+    return {
+      success: false,
+      message: "Koneksi database tidak tersedia.",
+    };
+  }
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return {
+      success: false,
+      message: "Sesi login Anda telah berakhir. Silakan masuk kembali.",
+    };
+  }
+
+  const { data: allowlisted } = await supabase
+    .from("pengurus_allowlist")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!allowlisted) {
+    return {
+      success: false,
+      message:
+        "Akses Ditolak: Hanya pengurus terdaftar yang berhak mengubah pengaturan sistem.",
+    };
+  }
+
+  const raw = {
+    show_expenses_on_home: formData.get("show_expenses_on_home"),
+  };
+
+  const validation = validateHomeExpensesSettingInput(raw);
+  if (!validation.valid || !validation.sanitized) {
+    return {
+      success: false,
+      message: "Pengaturan visibilitas pengeluaran tidak valid.",
+      errors: validation.errors,
+    };
+  }
+
+  const saveResult = await savePaymentSettings(
+    {
+      show_expenses_on_home: validation.sanitized.show_expenses_on_home,
+    },
+    supabase,
+    user.id
+  );
+
+  if (!saveResult.success) {
+    if (
+      saveResult.error?.includes("policy") ||
+      saveResult.error?.includes("42501")
+    ) {
+      return {
+        success: false,
+        message:
+          "Akses Ditolak: Akun Anda tidak memiliki izin untuk memperbarui pengaturan (RLS Policy).",
+      };
+    }
+
+    return {
+      success: false,
+      message: "Gagal memperbarui pengaturan visibilitas: " + saveResult.error,
+    };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/pengurus");
+  revalidatePath("/pengurus/pengaturan");
+
+  return {
+    success: true,
+    message: validation.sanitized.show_expenses_on_home
+      ? "Pengeluaran kini ditampilkan di beranda."
+      : "Pengeluaran kini disembunyikan dari beranda.",
+  };
+}
+
+// ponytail: Update home visibility settings (expenses & donations) in payment_settings with allowlist check & revalidation.
+export async function updateHomeVisibilitySettingsAction(
+  prevState: ActionResult | null,
+  formData: FormData
+): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) {
+    return {
+      success: false,
+      message: "Konfigurasi Supabase belum terpasang di server.",
+    };
+  }
+
+  const supabase = await getServerSupabase();
+  if (!supabase) {
+    return {
+      success: false,
+      message: "Koneksi database tidak tersedia.",
+    };
+  }
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return {
+      success: false,
+      message: "Sesi login Anda telah berakhir. Silakan masuk kembali.",
+    };
+  }
+
+  const { data: allowlisted } = await supabase
+    .from("pengurus_allowlist")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!allowlisted) {
+    return {
+      success: false,
+      message:
+        "Akses Ditolak: Hanya pengurus terdaftar yang berhak mengubah pengaturan sistem.",
+    };
+  }
+
+  const raw: { show_expenses_on_home?: unknown; show_donations_on_home?: unknown } = {};
+  if (formData.has("show_expenses_on_home")) {
+    raw.show_expenses_on_home = formData.get("show_expenses_on_home");
+  }
+  if (formData.has("show_donations_on_home")) {
+    raw.show_donations_on_home = formData.get("show_donations_on_home");
+  }
+
+  const validation = validateHomeVisibilitySettingsInput(raw);
+  if (!validation.valid || !validation.sanitized) {
+    return {
+      success: false,
+      message: "Pengaturan visibilitas tidak valid.",
+      errors: validation.errors,
+    };
+  }
+
+  const saveResult = await savePaymentSettings(
+    validation.sanitized,
+    supabase,
+    user.id
+  );
+
+  if (!saveResult.success) {
+    if (
+      saveResult.error?.includes("policy") ||
+      saveResult.error?.includes("42501")
+    ) {
+      return {
+        success: false,
+        message:
+          "Akses Ditolak: Akun Anda tidak memiliki izin untuk memperbarui pengaturan (RLS Policy).",
+      };
+    }
+
+    return {
+      success: false,
+      message: "Gagal memperbarui pengaturan visibilitas: " + saveResult.error,
+    };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/pengurus");
+  revalidatePath("/pengurus/pengaturan");
+
+  return {
+    success: true,
+    message: "Pengaturan tampilan beranda berhasil disimpan.",
+  };
+}
+
 // ponytail: Create a new treasurer record. Allows multiple active treasurers with isolated QRIS uploads.
 export async function createTreasurerAction(
   prevState: ActionResult | null,
@@ -822,9 +1018,715 @@ export async function updateTreasurerAction(
   };
 }
 
+// ponytail: Create a new expense record with optional private receipt upload.
+export async function createExpenseAction(
+  prevState: ActionResult | null,
+  formData: FormData
+): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) {
+    return {
+      success: false,
+      message: "Konfigurasi Supabase belum terpasang di server.",
+    };
+  }
+
+  const supabase = await getServerSupabase();
+  if (!supabase) {
+    return {
+      success: false,
+      message: "Koneksi database tidak tersedia.",
+    };
+  }
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return {
+      success: false,
+      message: "Sesi login Anda telah berakhir. Silakan masuk kembali.",
+    };
+  }
+
+  const { data: allowlisted } = await supabase
+    .from("pengurus_allowlist")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!allowlisted) {
+    return {
+      success: false,
+      message: "Akses Ditolak: Hanya pengurus terdaftar yang berhak mencatat pengeluaran.",
+    };
+  }
+
+  const raw = {
+    date: formData.get("date"),
+    description: formData.get("description"),
+    amount: formData.get("amount"),
+  };
+
+  const validation = validateExpenseInput(raw);
+  if (!validation.valid || !validation.sanitized) {
+    return {
+      success: false,
+      message: "Data pengeluaran tidak valid. Periksa isian formulir.",
+      errors: validation.errors,
+    };
+  }
+
+  let receiptStoragePath: string | null = null;
+  const receiptFile = formData.get("receipt");
+
+  if (receiptFile && receiptFile instanceof File && receiptFile.size > 0) {
+    if (receiptFile.size > MAX_FILE_SIZE_BYTES) {
+      return {
+        success: false,
+        message: "Ukuran berkas kuitansi melebihi batas maksimal 2MB.",
+      };
+    }
+
+    const arrayBuffer = await receiptFile.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const imgValidation = validateImageBuffer(buffer);
+    if (!imgValidation.valid || !imgValidation.extension || !imgValidation.mimeType) {
+      return {
+        success: false,
+        message: imgValidation.error || "Berkas kuitansi tidak valid (harus PNG, JPG, atau WEBP).",
+      };
+    }
+
+    const uniqueId = randomUUID().replace(/-/g, "").slice(0, 12);
+    receiptStoragePath = `receipts/${Date.now()}_${uniqueId}.${imgValidation.extension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("expense-receipts")
+      .upload(receiptStoragePath, buffer, {
+        contentType: imgValidation.mimeType,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      return {
+        success: false,
+        message: "Gagal mengunggah berkas kuitansi: " + uploadError.message,
+      };
+    }
+  }
+
+  const { error: insertError } = await supabase.from("expenses").insert({
+    date: validation.sanitized.date,
+    description: validation.sanitized.description,
+    amount: validation.sanitized.amount,
+    receipt_path: receiptStoragePath,
+    created_by: user.id,
+    updated_by: user.id,
+  });
+
+  if (insertError) {
+    // Rollback uploaded storage receipt on DB insert failure
+    if (receiptStoragePath) {
+      try {
+        await supabase.storage.from("expense-receipts").remove([receiptStoragePath]);
+      } catch {
+        // Ignore cleanup error
+      }
+    }
+
+    if (insertError.code === "42501" || insertError.message.includes("policy")) {
+      return {
+        success: false,
+        message: "Akses Ditolak: Akun Anda tidak memiliki izin untuk menambah data pengeluaran (RLS Policy).",
+      };
+    }
+
+    return {
+      success: false,
+      message: "Gagal mencatat pengeluaran: " + insertError.message,
+    };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/pengurus");
+  revalidatePath("/pengurus/pengeluaran");
+
+  return {
+    success: true,
+    message: `Pengeluaran sebesar Rp ${validation.sanitized.amount.toLocaleString("id-ID")} berhasil dicatat.`,
+  };
+}
+
+// ponytail: Update existing expense record with optional receipt replacement or deletion.
+export async function updateExpenseAction(
+  id: number,
+  prevState: ActionResult | null,
+  formData: FormData
+): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) {
+    return {
+      success: false,
+      message: "Konfigurasi Supabase belum terpasang di server.",
+    };
+  }
+
+  const safeId = typeof id === "number" ? id : Number(id);
+  if (!Number.isSafeInteger(safeId) || safeId <= 0) {
+    return {
+      success: false,
+      message: "ID pengeluaran tidak valid.",
+    };
+  }
+
+  const supabase = await getServerSupabase();
+  if (!supabase) {
+    return {
+      success: false,
+      message: "Koneksi database tidak tersedia.",
+    };
+  }
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return {
+      success: false,
+      message: "Sesi login Anda telah berakhir. Silakan masuk kembali.",
+    };
+  }
+
+  const { data: allowlisted } = await supabase
+    .from("pengurus_allowlist")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!allowlisted) {
+    return {
+      success: false,
+      message: "Akses Ditolak: Hanya pengurus terdaftar yang berhak memperbarui pengeluaran.",
+    };
+  }
+
+  const raw = {
+    date: formData.get("date"),
+    description: formData.get("description"),
+    amount: formData.get("amount"),
+  };
+
+  const validation = validateExpenseInput(raw);
+  if (!validation.valid || !validation.sanitized) {
+    return {
+      success: false,
+      message: "Data pengeluaran tidak valid. Periksa isian formulir.",
+      errors: validation.errors,
+    };
+  }
+
+  // Fetch current record to get existing receipt_path
+  const { data: currentExpense } = await supabase
+    .from("expenses")
+    .select("id, receipt_path")
+    .eq("id", safeId)
+    .maybeSingle();
+
+  if (!currentExpense) {
+    return {
+      success: false,
+      message: "Data pengeluaran tidak ditemukan.",
+    };
+  }
+
+  const removeReceipt = formData.get("remove_receipt") === "true" || formData.get("remove_receipt") === "1";
+  let finalReceiptPath: string | null = currentExpense.receipt_path;
+  const oldReceiptToDelete: string | null = (removeReceipt || formData.get("receipt")) ? currentExpense.receipt_path : null;
+
+  if (removeReceipt) {
+    finalReceiptPath = null;
+  }
+
+  const newReceiptFile = formData.get("receipt");
+  if (newReceiptFile && newReceiptFile instanceof File && newReceiptFile.size > 0) {
+    if (newReceiptFile.size > MAX_FILE_SIZE_BYTES) {
+      return {
+        success: false,
+        message: "Ukuran berkas kuitansi melebihi batas maksimal 2MB.",
+      };
+    }
+
+    const arrayBuffer = await newReceiptFile.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const imgValidation = validateImageBuffer(buffer);
+    if (!imgValidation.valid || !imgValidation.extension || !imgValidation.mimeType) {
+      return {
+        success: false,
+        message: imgValidation.error || "Berkas kuitansi tidak valid (harus PNG, JPG, atau WEBP).",
+      };
+    }
+
+    const uniqueId = randomUUID().replace(/-/g, "").slice(0, 12);
+    const newStoragePath = `receipts/${Date.now()}_${uniqueId}.${imgValidation.extension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("expense-receipts")
+      .upload(newStoragePath, buffer, {
+        contentType: imgValidation.mimeType,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      return {
+        success: false,
+        message: "Gagal mengunggah berkas kuitansi pengganti: " + uploadError.message,
+      };
+    }
+
+    finalReceiptPath = newStoragePath;
+  }
+
+  const { data: updatedRecord, error: updateError } = await supabase
+    .from("expenses")
+    .update({
+      date: validation.sanitized.date,
+      description: validation.sanitized.description,
+      amount: validation.sanitized.amount,
+      receipt_path: finalReceiptPath,
+      updated_at: new Date().toISOString(),
+      updated_by: user.id,
+    })
+    .eq("id", safeId)
+    .select("id")
+    .maybeSingle();
+
+  if (updateError) {
+    // Cleanup newly uploaded file if DB update failed
+    if (finalReceiptPath && finalReceiptPath !== currentExpense.receipt_path) {
+      try {
+        await supabase.storage.from("expense-receipts").remove([finalReceiptPath]);
+      } catch {
+        // Ignore
+      }
+    }
+
+    if (updateError.code === "42501" || updateError.message.includes("policy")) {
+      return {
+        success: false,
+        message: "Akses Ditolak: Akun Anda tidak memiliki izin untuk memperbarui pengeluaran (RLS Policy).",
+      };
+    }
+
+    return {
+      success: false,
+      message: "Gagal memperbarui data pengeluaran: " + updateError.message,
+    };
+  }
+
+  if (!updatedRecord) {
+    return {
+      success: false,
+      message: "Data pengeluaran tidak ditemukan.",
+    };
+  }
+
+  // Cleanup old receipt file from storage if it was removed or replaced
+  if (oldReceiptToDelete && oldReceiptToDelete !== finalReceiptPath) {
+    try {
+      await supabase.storage.from("expense-receipts").remove([oldReceiptToDelete]);
+    } catch {
+      // Ignore cleanup error
+    }
+  }
+
+  revalidatePath("/");
+  revalidatePath("/pengurus");
+  revalidatePath("/pengurus/pengeluaran");
+  revalidatePath(`/pengurus/pengeluaran/${safeId}`);
+
+  return {
+    success: true,
+    message: `Data pengeluaran berhasil diperbarui.`,
+  };
+}
+
+// ponytail: Delete an expense record and remove its receipt from storage.
+export async function deleteExpenseAction(id: number): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) {
+    return {
+      success: false,
+      message: "Konfigurasi Supabase belum terpasang di server.",
+    };
+  }
+
+  const safeId = typeof id === "number" ? id : Number(id);
+  if (!Number.isSafeInteger(safeId) || safeId <= 0) {
+    return {
+      success: false,
+      message: "ID pengeluaran tidak valid.",
+    };
+  }
+
+  const supabase = await getServerSupabase();
+  if (!supabase) {
+    return {
+      success: false,
+      message: "Koneksi database tidak tersedia.",
+    };
+  }
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return {
+      success: false,
+      message: "Sesi login Anda telah berakhir. Silakan masuk kembali.",
+    };
+  }
+
+  const { data: allowlisted } = await supabase
+    .from("pengurus_allowlist")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!allowlisted) {
+    return {
+      success: false,
+      message: "Akses Ditolak: Hanya pengurus terdaftar yang berhak menghapus data.",
+    };
+  }
+
+  // Fetch receipt_path first to clean up storage after deletion
+  const { data: record } = await supabase
+    .from("expenses")
+    .select("id, receipt_path")
+    .eq("id", safeId)
+    .maybeSingle();
+
+  const { data: deletedRecord, error: deleteError } = await supabase
+    .from("expenses")
+    .delete()
+    .eq("id", safeId)
+    .select("id")
+    .maybeSingle();
+
+  if (deleteError) {
+    if (deleteError.code === "42501" || deleteError.message.includes("policy")) {
+      return {
+        success: false,
+        message: "Akses Ditolak: Akun Anda tidak memiliki izin untuk menghapus data (RLS Policy).",
+      };
+    }
+
+    return {
+      success: false,
+      message: "Gagal menghapus data pengeluaran: " + deleteError.message,
+    };
+  }
+
+  if (!deletedRecord) {
+    return {
+      success: false,
+      message: "Data pengeluaran tidak ditemukan atau sudah dihapus sebelumnya.",
+    };
+  }
+
+  // Clean up receipt image from storage if present
+  if (record?.receipt_path) {
+    try {
+      await supabase.storage.from("expense-receipts").remove([record.receipt_path]);
+    } catch {
+      // Ignore storage cleanup error
+    }
+  }
+
+  revalidatePath("/");
+  revalidatePath("/pengurus");
+  revalidatePath("/pengurus/pengeluaran");
+
+  return {
+    success: true,
+    message: "Data pengeluaran berhasil dihapus.",
+  };
+}
+
 export async function logoutAction() {
   const supabase = await getServerSupabase();
   if (supabase) {
     await supabase.auth.signOut();
   }
+}
+
+// ponytail: Upload and store gallery documentation photos for kerja bakti and its results. Enforces allowlist, magic bytes, and max 5MB.
+export async function uploadGalleryPhotoAction(
+  prevState: ActionResult | null,
+  formData: FormData
+): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) {
+    return {
+      success: false,
+      message: "Konfigurasi Supabase belum terpasang di server.",
+    };
+  }
+
+  const raw = {
+    title: formData.get("title"),
+    category: formData.get("category"),
+    caption: formData.get("caption"),
+  };
+
+  const validation = validateGalleryInput(raw);
+  if (!validation.valid || !validation.sanitized) {
+    return {
+      success: false,
+      message: "Data formulir foto galeri tidak valid.",
+      errors: validation.errors,
+    };
+  }
+
+  const file = formData.get("image");
+  if (!file || !(file instanceof File) || file.size === 0) {
+    return {
+      success: false,
+      message: "Pilih berkas foto yang akan diunggah.",
+      errors: { image: "Berkas foto wajib dipilih." },
+    };
+  }
+
+  if (file.size > MAX_GALLERY_FILE_SIZE_BYTES) {
+    return {
+      success: false,
+      message: "Ukuran foto melebihi batas maksimal 5MB.",
+      errors: { image: "Ukuran foto maksimal 5MB." },
+    };
+  }
+
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const imgValidation = validateImageBuffer(buffer, MAX_GALLERY_FILE_SIZE_BYTES);
+
+  if (!imgValidation.valid || !imgValidation.extension || !imgValidation.mimeType) {
+    return {
+      success: false,
+      message: imgValidation.error || "Berkas foto tidak valid.",
+      errors: { image: imgValidation.error || "Format gambar tidak didukung." },
+    };
+  }
+
+  const supabase = await getServerSupabase();
+  if (!supabase) {
+    return {
+      success: false,
+      message: "Koneksi database tidak tersedia.",
+    };
+  }
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return {
+      success: false,
+      message: "Sesi login Anda telah berakhir. Silakan masuk kembali.",
+    };
+  }
+
+  const { data: allowlisted } = await supabase
+    .from("pengurus_allowlist")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!allowlisted) {
+    return {
+      success: false,
+      message: "Akses Ditolak: Hanya pengurus terdaftar yang berhak mengunggah dokumentasi.",
+    };
+  }
+
+  const uniqueId = randomUUID().slice(0, 8);
+  const storagePath = `photos/${validation.sanitized.category}_${Date.now()}_${uniqueId}.${imgValidation.extension}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(GALLERY_STORAGE_BUCKET)
+    .upload(storagePath, buffer, {
+      contentType: imgValidation.mimeType,
+      cacheControl: "31536000",
+      upsert: false,
+    });
+
+  if (uploadError) {
+    if (
+      uploadError.message.includes("policy") ||
+      (uploadError as { statusCode?: string }).statusCode === "403"
+    ) {
+      return {
+        success: false,
+        message: "Akses Ditolak: Akun Anda tidak memiliki izin untuk mengunggah ke galeri (Storage Policy).",
+      };
+    }
+    return {
+      success: false,
+      message: "Gagal mengunggah foto ke penyimpanan: " + uploadError.message,
+    };
+  }
+
+  const { data: urlData } = supabase.storage
+    .from(GALLERY_STORAGE_BUCKET)
+    .getPublicUrl(storagePath);
+
+  const { error: insertError } = await supabase
+    .from("gallery_items")
+    .insert({
+      title: validation.sanitized.title,
+      category: validation.sanitized.category,
+      caption: validation.sanitized.caption,
+      image_url: urlData.publicUrl,
+      storage_path: storagePath,
+      created_by: user.id,
+    });
+
+  if (insertError) {
+    // Rollback uploaded storage file on DB insert failure
+    try {
+      await supabase.storage.from(GALLERY_STORAGE_BUCKET).remove([storagePath]);
+    } catch {
+      // Ignore cleanup error
+    }
+
+    if (insertError.code === "42501" || insertError.message.includes("policy")) {
+      return {
+        success: false,
+        message: "Akses Ditolak: Akun Anda tidak memiliki izin untuk menyimpan data foto (RLS Policy).",
+      };
+    }
+
+    return {
+      success: false,
+      message: "Gagal menyimpan data foto ke database: " + insertError.message,
+    };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/galeri");
+  revalidatePath("/pengurus/galeri");
+  revalidatePath("/admin/galeri");
+
+  return {
+    success: true,
+    message: "Foto dokumentasi kerja bakti berhasil diunggah.",
+  };
+}
+
+// ponytail: Delete a gallery item and remove its corresponding storage object.
+export async function deleteGalleryPhotoAction(id: number): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) {
+    return {
+      success: false,
+      message: "Konfigurasi Supabase belum terpasang di server.",
+    };
+  }
+
+  const safeId = typeof id === "number" ? id : Number(id);
+  if (!Number.isSafeInteger(safeId) || safeId <= 0) {
+    return {
+      success: false,
+      message: "ID foto galeri tidak valid.",
+    };
+  }
+
+  const supabase = await getServerSupabase();
+  if (!supabase) {
+    return {
+      success: false,
+      message: "Koneksi database tidak tersedia.",
+    };
+  }
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return {
+      success: false,
+      message: "Sesi login Anda telah berakhir. Silakan masuk kembali.",
+    };
+  }
+
+  const { data: allowlisted } = await supabase
+    .from("pengurus_allowlist")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!allowlisted) {
+    return {
+      success: false,
+      message: "Akses Ditolak: Hanya pengurus terdaftar yang berhak menghapus dokumentasi.",
+    };
+  }
+
+  // Fetch storage_path before deleting record
+  const { data: record } = await supabase
+    .from("gallery_items")
+    .select("id, storage_path")
+    .eq("id", safeId)
+    .maybeSingle();
+
+  const { data: deletedRecord, error: deleteError } = await supabase
+    .from("gallery_items")
+    .delete()
+    .eq("id", safeId)
+    .select("id")
+    .maybeSingle();
+
+  if (deleteError) {
+    if (deleteError.code === "42501" || deleteError.message.includes("policy")) {
+      return {
+        success: false,
+        message: "Akses Ditolak: Akun Anda tidak memiliki izin untuk menghapus data foto (RLS Policy).",
+      };
+    }
+
+    return {
+      success: false,
+      message: "Gagal menghapus data foto: " + deleteError.message,
+    };
+  }
+
+  if (!deletedRecord) {
+    return {
+      success: false,
+      message: "Data foto tidak ditemukan atau sudah dihapus sebelumnya.",
+    };
+  }
+
+  if (record?.storage_path) {
+    try {
+      await supabase.storage.from(GALLERY_STORAGE_BUCKET).remove([record.storage_path]);
+    } catch {
+      // Ignore storage cleanup error
+    }
+  }
+
+  revalidatePath("/");
+  revalidatePath("/galeri");
+  revalidatePath("/pengurus/galeri");
+  revalidatePath("/admin/galeri");
+
+  return {
+    success: true,
+    message: "Foto dokumentasi berhasil dihapus.",
+  };
 }

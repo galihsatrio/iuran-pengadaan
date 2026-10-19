@@ -3,12 +3,16 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { formatIDR, formatWhatsAppUrl } from "@/lib/format";
+import { formatIDR, formatWhatsAppUrl, formatDateOnlyID } from "@/lib/format";
 import { getActiveTreasurers } from "@/lib/treasurers";
-import type { IuranRecord } from "@/lib/types";
+import { getPublicExpenses, calculateCashFlow } from "@/lib/expenses";
+import { getPaymentSettings } from "@/lib/payment-settings";
+import { getPublicGalleryItems } from "@/lib/gallery";
+import type { IuranRecord, PublicExpense, PublicGalleryItem } from "@/lib/types";
 import {
   calculateResidentTotals,
   calculateResidentDuesStatus,
+  calculateResidentExcessDonations,
   getResidentKey,
   sortRecordsByCumulativePaidDesc,
 } from "@/lib/dues";
@@ -19,12 +23,18 @@ async function IuranContent() {
   const configured = isSupabaseConfigured();
 
   let records: IuranRecord[] = [];
+  let expenses: PublicExpense[] = [];
+  let showExpenses = true;
+  let showDonations = true;
   let errorMessage: string | null = null;
-  let totalAmount = 0;
 
   if (configured) {
     const supabase = await getServerSupabase();
     if (supabase) {
+      const settings = await getPaymentSettings(supabase);
+      showExpenses = settings.show_expenses_on_home ?? true;
+      showDonations = settings.show_donations_on_home ?? true;
+
       // Public warga query: only requested public fields, no secret/auth fields
       const { data, error } = await supabase
         .from("iuran")
@@ -35,33 +45,69 @@ async function IuranContent() {
         errorMessage = error.message;
       } else if (data) {
         records = data as IuranRecord[];
-        totalAmount = records.reduce(
-          (sum, r) => sum + Number(r.amount || 0),
-          0
-        );
+      }
+
+      // Public expenses query: only safe disclosure fields (no receipt path or user IDs)
+      // Only fetch if showExpenses is true to prevent leaking expense details
+      if (showExpenses) {
+        expenses = await getPublicExpenses(supabase);
       }
     }
   }
+
+  const cashFlow = calculateCashFlow(records, expenses);
 
   return (
     <>
       {/* Overview Stats */}
       <section aria-labelledby="stats-heading" className="mb-8">
         <h2 id="stats-heading" className="sr-only">
-          Ringkasan Iuran
+          Ringkasan Kas Iuran &amp; Pengeluaran
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${showExpenses ? "lg:grid-cols-4" : "lg:grid-cols-2"} gap-4`}>
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Total Dana Terkumpul
             </span>
             <p className="mt-2 text-2xl sm:text-3xl font-extrabold text-emerald-600">
-              {formatIDR(totalAmount)}
+              {formatIDR(cashFlow.totalIncome)}
             </p>
             <p className="mt-1 text-xs text-slate-500">
               Dari {records.length} catatan iuran warga
             </p>
           </div>
+
+          {showExpenses && (
+            <>
+              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Total Pengeluaran
+                </span>
+                <p className="mt-2 text-2xl sm:text-3xl font-extrabold text-rose-600">
+                  {formatIDR(cashFlow.totalExpense)}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Dari {expenses.length} alokasi kas
+                </p>
+              </div>
+
+              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Saldo Kas Bersih
+                </span>
+                <p
+                  className={`mt-2 text-2xl sm:text-3xl font-extrabold ${
+                    cashFlow.netBalance >= 0 ? "text-emerald-700" : "text-rose-700"
+                  }`}
+                >
+                  {formatIDR(cashFlow.netBalance)}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Pemasukan dikurangi pengeluaran
+                </p>
+              </div>
+            </>
+          )}
 
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -71,7 +117,7 @@ async function IuranContent() {
               {records.length} <span className="text-base font-medium text-slate-500">Warga</span>
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              Pengadaan dan pemasangan portal otomatis
+              Pengadaan &amp; pemeliharaan portal
             </p>
           </div>
         </div>
@@ -255,6 +301,199 @@ async function IuranContent() {
           );
         })()}
       </section>
+
+      {/* Sumbangan & Apresiasi Warga (Kelebihan Pembayaran Iuran) */}
+      {showDonations && (() => {
+        const donations = calculateResidentExcessDonations(records);
+        if (donations.length === 0) return null;
+
+        const totalDonations = donations.reduce((sum, d) => sum + d.excessAmount, 0);
+
+        return (
+          <section
+            aria-labelledby="donations-heading"
+            className="bg-white rounded-xl border border-amber-200/80 shadow-xs overflow-hidden mt-8"
+          >
+            <div className="p-4 sm:p-5 border-b border-amber-100 bg-amber-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-xs">
+                    ⭐
+                  </span>
+                  <h2 id="donations-heading" className="text-base sm:text-lg font-bold text-slate-900">
+                    Sumbangan &amp; Apresiasi Warga
+                  </h2>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Apresiasi dan terima kasih warga yang berpartisipasi sukarela melebihi target iuran wajib Rp75.000
+                </p>
+              </div>
+              <div className="text-xs font-semibold text-slate-700 bg-white px-3 py-1.5 rounded-lg border border-amber-200 self-start sm:self-auto shadow-2xs">
+                Total Sumbangan Sukarela:{" "}
+                <span className="text-amber-700 font-bold">
+                  {formatIDR(totalDonations)}
+                </span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm text-slate-700 min-w-[560px]">
+                <thead className="bg-slate-50/50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
+                  <tr>
+                    <th scope="col" className="py-2.5 px-4 w-12 text-center">
+                      No
+                    </th>
+                    <th scope="col" className="py-2.5 px-4">
+                      Warga &amp; Unit Rumah
+                    </th>
+                    <th scope="col" className="py-2.5 px-4 text-right">
+                      Total Bayar
+                    </th>
+                    <th scope="col" className="py-2.5 px-4 text-center">
+                      Iuran Wajib
+                    </th>
+                    <th scope="col" className="py-2.5 px-4 text-right">
+                      Kelebihan (Sumbangan)
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {donations.map((donor, idx) => (
+                    <tr key={donor.residentKey} className="hover:bg-amber-50/20 transition-colors">
+                      <td className="py-2.5 px-4 text-center text-slate-400 text-xs font-mono">
+                        {idx + 1}
+                      </td>
+                      <td className="py-2.5 px-4">
+                        <span className="font-semibold text-slate-800">
+                          {donor.namaKepalaKeluarga || "Warga"}
+                        </span>
+                        <span className="block text-xs text-slate-500">
+                          Blok {donor.namaBlok} No. {donor.nomorBlok}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-4 text-right font-medium text-slate-600">
+                        {formatIDR(donor.cumulativePaid)}
+                      </td>
+                      <td className="py-2.5 px-4 text-center">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          Lunas Rp75.000
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-4 text-right font-bold text-amber-700">
+                        + {formatIDR(donor.excessAmount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-amber-50/30 font-semibold text-xs border-t border-amber-200 text-slate-700">
+                  <tr>
+                    <td colSpan={4} className="py-2.5 px-4 text-right">
+                      Total Seluruh Sumbangan Warga:
+                    </td>
+                    <td className="py-2.5 px-4 text-right text-amber-800 font-bold">
+                      {formatIDR(totalDonations)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </section>
+        );
+      })()}
+
+      {/* Public Expenses Disclosure Section */}
+      {showExpenses && (
+        <section aria-labelledby="expenses-heading" className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden mt-8">
+          <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 id="expenses-heading" className="text-base sm:text-lg font-bold text-slate-900">
+                Daftar Pengeluaran Kas Lingkungan
+              </h2>
+              <p className="text-xs text-slate-500">
+                Klik pada nominal untuk melihat tanggal dan rincian alokasi biaya
+              </p>
+            </div>
+            <div className="text-xs font-semibold text-slate-700 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 self-start sm:self-auto">
+              Total Pengeluaran:{" "}
+              <span className="text-rose-600 font-bold">
+                {formatIDR(cashFlow.totalExpense)}
+              </span>
+            </div>
+          </div>
+
+          {expenses.length === 0 ? (
+            <div className="py-12 px-4 text-center">
+              <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                🧾
+              </div>
+              <h3 className="text-sm font-semibold text-slate-700">
+                Belum ada catatan pengeluaran
+              </h3>
+              <p className="mt-1 text-xs text-slate-500 max-w-sm mx-auto">
+                Semua pencatatan biaya dan pemakaian dana kas portal akan tampil di sini secara transparan.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {expenses.map((expense, idx) => (
+                <details
+                  key={expense.id}
+                  className="group transition-colors hover:bg-slate-50/70"
+                >
+                  <summary className="cursor-pointer list-none flex items-center justify-between p-4 sm:px-5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 select-none [&::-webkit-details-marker]:hidden">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-mono text-slate-400 w-6 text-center">
+                        {idx + 1}
+                      </span>
+                      <span className="text-sm sm:text-base font-bold text-rose-600">
+                        - {formatIDR(expense.amount)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 group-hover:text-slate-700">
+                      <span className="hidden sm:inline">Rincian</span>
+                      <svg
+                        className="w-4 h-4 transform transition-transform group-open:rotate-180 text-slate-400 group-hover:text-slate-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 9l-7 7-7-7"
+                        />
+                      </svg>
+                    </div>
+                  </summary>
+
+                  <div className="px-4 sm:px-5 pb-4 pt-1 bg-slate-50/60 border-t border-slate-100">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 text-xs">
+                      <div>
+                        <span className="font-semibold text-slate-500 block uppercase text-[10px] tracking-wider">
+                          Tanggal Pengeluaran
+                        </span>
+                        <span className="text-slate-800 font-medium mt-0.5 block">
+                          {formatDateOnlyID(expense.date)}
+                        </span>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <span className="font-semibold text-slate-500 block uppercase text-[10px] tracking-wider">
+                          Keterangan Alokasi
+                        </span>
+                        <p className="text-slate-800 font-medium mt-0.5 whitespace-pre-line">
+                          {expense.description}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
     </>
   );
 }
@@ -264,10 +503,20 @@ function IuranSkeleton() {
     <>
       {/* Overview Stats Skeleton */}
       <section aria-label="Memuat Ringkasan Iuran" className="mb-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs animate-pulse">
             <div className="h-3 w-32 bg-slate-200 rounded"></div>
             <div className="mt-3 h-8 w-44 bg-slate-200 rounded"></div>
+            <div className="mt-2 h-3 w-28 bg-slate-200 rounded"></div>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs animate-pulse">
+            <div className="h-3 w-32 bg-slate-200 rounded"></div>
+            <div className="mt-3 h-8 w-36 bg-slate-200 rounded"></div>
+            <div className="mt-2 h-3 w-28 bg-slate-200 rounded"></div>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs animate-pulse">
+            <div className="h-3 w-32 bg-slate-200 rounded"></div>
+            <div className="mt-3 h-8 w-40 bg-slate-200 rounded"></div>
             <div className="mt-2 h-3 w-28 bg-slate-200 rounded"></div>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs animate-pulse">
@@ -549,6 +798,163 @@ async function PaymentInfoSection() {
   );
 }
 
+function GalleryPreviewSkeleton() {
+  return (
+    <section
+      aria-label="Memuat Galeri Foto Lingkungan"
+      className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden mt-8 animate-pulse"
+    >
+      <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="space-y-2">
+          <div className="h-4 w-28 bg-slate-200 rounded"></div>
+          <div className="h-5 w-48 bg-slate-200 rounded"></div>
+          <div className="h-3 w-64 bg-slate-200 rounded"></div>
+        </div>
+        <div className="h-10 w-32 bg-slate-200 rounded-lg"></div>
+      </div>
+      <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div key={i} className="rounded-xl border border-slate-200 overflow-hidden">
+            <div className="aspect-[4/3] bg-slate-200"></div>
+            <div className="p-3.5 space-y-2">
+              <div className="h-4 w-3/4 bg-slate-200 rounded"></div>
+              <div className="h-3 w-full bg-slate-200 rounded"></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ponytail: Direct server component query fetching limited preview items (6 photos) wrapped in Suspense. Full gallery at /galeri.
+async function GalleryPreviewSection() {
+  const configured = isSupabaseConfigured();
+  let items: PublicGalleryItem[] = [];
+
+  if (configured) {
+    const supabase = await getServerSupabase();
+    if (supabase) {
+      items = await getPublicGalleryItems(supabase, "all", 6);
+    }
+  }
+
+  return (
+    <section
+      aria-labelledby="gallery-preview-heading"
+      className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden mt-8"
+    >
+      <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200/60">
+            Dokumentasi Lingkungan
+          </span>
+          <h2 id="gallery-preview-heading" className="text-base sm:text-lg font-bold text-slate-900 mt-1">
+            Galeri Foto Kerja Bakti &amp; Hasil
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Dokumentasi transparansi kegiatan gotong royong dan realisasi portal warga
+          </p>
+        </div>
+        <Link
+          href="/galeri"
+          className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 min-h-[40px] text-xs sm:text-sm font-semibold rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-600 self-start sm:self-auto shrink-0"
+        >
+          <span>Lihat lebih banyak</span>
+          <span aria-hidden="true">&rarr;</span>
+        </Link>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="p-8 sm:p-12 text-center">
+          <div className="w-12 h-12 mx-auto rounded-full bg-slate-100 flex items-center justify-center text-slate-400 text-xl mb-3">
+            📷
+          </div>
+          <h3 className="text-sm sm:text-base font-semibold text-slate-800">
+            Belum Ada Foto Dokumentasi
+          </h3>
+          <p className="mt-1 text-xs sm:text-sm text-slate-500 max-w-sm mx-auto">
+            Dokumentasi kerja bakti dan hasil pengadaan portal belum diunggah oleh pengurus.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+            {items.map((item) => (
+              <article
+                key={item.id}
+                className="group bg-white rounded-xl border border-slate-200 shadow-xs hover:shadow-md transition-shadow overflow-hidden flex flex-col"
+              >
+                <Link
+                  href="/galeri"
+                  className="relative aspect-[4/3] bg-slate-100 overflow-hidden block focus-visible:outline-2 focus-visible:outline-emerald-600"
+                  aria-label={`Lihat foto ${item.title} di galeri lengkap`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.image_url}
+                    alt={item.title}
+                    loading="lazy"
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                  <div className="absolute top-2.5 left-2.5">
+                    {item.category === "kegiatan" ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-sky-100/90 text-sky-800 backdrop-blur-xs ring-1 ring-sky-300/50 shadow-2xs">
+                        Kegiatan
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100/90 text-emerald-800 backdrop-blur-xs ring-1 ring-emerald-300/50 shadow-2xs">
+                        Hasil
+                      </span>
+                    )}
+                  </div>
+                </Link>
+
+                <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between">
+                  <div>
+                    <Link
+                      href="/galeri"
+                      className="font-bold text-sm text-slate-900 group-hover:text-emerald-700 transition-colors line-clamp-1 block"
+                    >
+                      {item.title}
+                    </Link>
+                    {item.caption && (
+                      <p className="mt-1 text-xs text-slate-600 line-clamp-2">
+                        {item.caption}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                    <time dateTime={item.created_at}>{formatDateOnlyID(item.created_at)}</time>
+                    <Link
+                      href="/galeri"
+                      className="text-emerald-700 hover:text-emerald-800 font-medium inline-flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-emerald-600 rounded"
+                    >
+                      <span>Buka Galeri</span>
+                      <span aria-hidden="true">&rarr;</span>
+                    </Link>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="p-4 bg-slate-50 border-t border-slate-200 text-center">
+            <Link
+              href="/galeri"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 min-h-[40px] text-xs sm:text-sm font-semibold rounded-lg text-emerald-700 bg-white border border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-600 shadow-2xs"
+            >
+              <span>Lihat lebih banyak</span>
+              <span aria-hidden="true">&rarr;</span>
+            </Link>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 export default function HomePage() {
   const configured = isSupabaseConfigured();
 
@@ -570,13 +976,21 @@ export default function HomePage() {
               </p>
             </div>
           </div>
-          <Link
-            href="/pengurus"
-            className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-[44px] text-xs sm:text-sm font-medium rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-600 shrink-0"
-          >
-            <span>Area Pengurus</span>
-            <span aria-hidden="true">&rarr;</span>
-          </Link>
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <Link
+              href="/galeri"
+              className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-[44px] text-xs sm:text-sm font-medium rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-600 shrink-0"
+            >
+              <span>Galeri Foto</span>
+            </Link>
+            <Link
+              href="/pengurus"
+              className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-[44px] text-xs sm:text-sm font-medium rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-600 shrink-0"
+            >
+              <span>Area Pengurus</span>
+              <span aria-hidden="true">&rarr;</span>
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -618,6 +1032,10 @@ export default function HomePage() {
 
         <Suspense fallback={<IuranSkeleton />}>
           <IuranContent />
+        </Suspense>
+
+        <Suspense fallback={<GalleryPreviewSkeleton />}>
+          <GalleryPreviewSection />
         </Suspense>
 
 

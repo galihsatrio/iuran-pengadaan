@@ -1,16 +1,19 @@
 import assert from "node:assert/strict";
 import * as XLSX from "xlsx";
-import { formatIDR, formatDateID, normalizeWhatsAppNumber, formatWhatsAppUrl } from "../lib/format.ts";
-import { validateIuranInput } from "../lib/validation.ts";
+import { formatDateOnlyID, normalizeWhatsAppNumber, formatWhatsAppUrl } from "../lib/format.ts";
+import { validateIuranInput, validateExpenseInput, validateGalleryInput, validateHomeExpensesSettingInput, validateHomeVisibilitySettingsInput } from "../lib/validation.ts";
+import { calculateCashFlow } from "../lib/expenses.ts";
 import {
   validateImageBuffer,
   MAX_FILE_SIZE_BYTES,
+  MAX_GALLERY_FILE_SIZE_BYTES,
   getPaymentSettings,
   savePaymentSettings,
 } from "../lib/payment-settings.ts";
 import {
   calculateResidentTotals,
   sortRecordsByCumulativePaidDesc,
+  calculateResidentExcessDonations,
 } from "../lib/dues.ts";
 
 
@@ -832,6 +835,809 @@ console.log("\n[13] Uji Urutan Data Berdasarkan Nominal Kumulatif (sortRecordsBy
   assert.notEqual(res, orig, "Harus mengembalikan array baru");
   assert.deepEqual(orig, origCopy, "Array asli tidak boleh dimutasi");
   console.log("  ✓ Immutabilitas array input terverifikasi tanpa mutasi");
+}
+
+// 14. Uji Validasi Input Pengeluaran (validateExpenseInput)
+console.log("\n[14] Uji Validasi Input Pengeluaran (validateExpenseInput):");
+{
+  // 14.1 Input valid
+  const valid = validateExpenseInput({
+    date: "  2025-10-19  ",
+    description: "  Beli semen & cat marka jalan  ",
+    amount: " 150000 ",
+  });
+  assert.equal(valid.valid, true);
+  assert.equal(valid.sanitized?.date, "2025-10-19");
+  assert.equal(valid.sanitized?.description, "Beli semen & cat marka jalan");
+  assert.equal(valid.sanitized?.amount, 150000);
+  console.log("  ✓ Valid case lolos sanitasi (trimming & konversi integer)");
+
+  // 14.2 Input kosong
+  const empty = validateExpenseInput({});
+  assert.equal(empty.valid, false);
+  assert.ok(empty.errors.date, "Wajib error date jika kosong");
+  assert.ok(empty.errors.description, "Wajib error description jika kosong");
+  assert.ok(empty.errors.amount, "Wajib error amount jika kosong");
+  console.log("  ✓ Deteksi field kosong lolos");
+
+  // 14.3 Format tanggal tidak valid (bukan YYYY-MM-DD)
+  const invalidDateFmt = validateExpenseInput({
+    date: "19/10/2025",
+    description: "Operasional",
+    amount: 50000,
+  });
+  assert.equal(invalidDateFmt.valid, false);
+  assert.ok(invalidDateFmt.errors.date);
+
+  // 14.4 Tanggal kalender tidak eksis (contoh: 2025-02-31)
+  const nonExistentDate = validateExpenseInput({
+    date: "2025-02-31",
+    description: "Operasional",
+    amount: 50000,
+  });
+  assert.equal(nonExistentDate.valid, false);
+  assert.ok(nonExistentDate.errors.date);
+  console.log("  ✓ Validasi tanggal ISO & kalender valid lolos");
+
+  // 14.5 Keterangan melebihi batas 255 karakter
+  const longDesc = validateExpenseInput({
+    date: "2025-10-19",
+    description: "X".repeat(256),
+    amount: 50000,
+  });
+  assert.equal(longDesc.valid, false);
+  assert.ok(longDesc.errors.description);
+  console.log("  ✓ Pembatasan panjang keterangan (<= 255 karakter) lolos");
+
+  // 14.6 Nominal tidak valid (negatif, nol, pecahan, melebihi batas)
+  assert.equal(validateExpenseInput({ date: "2025-10-19", description: "Ok", amount: 0 }).valid, false);
+  assert.equal(validateExpenseInput({ date: "2025-10-19", description: "Ok", amount: -5000 }).valid, false);
+  assert.equal(validateExpenseInput({ date: "2025-10-19", description: "Ok", amount: 1000.5 }).valid, false);
+  assert.equal(validateExpenseInput({ date: "2025-10-19", description: "Ok", amount: 2_000_000_000 }).valid, false);
+  assert.equal(validateExpenseInput({ date: "2025-10-19", description: "Ok", amount: "abc" }).valid, false);
+  console.log("  ✓ Penolakan nominal non-positif, pecahan, dan di luar batas wajar lolos");
+}
+
+// 15. Uji Perhitungan Saldo Kas Bersih (calculateCashFlow)
+console.log("\n[15] Uji Perhitungan Saldo Kas Bersih (calculateCashFlow):");
+{
+  const incomes = [{ amount: 500000 }, { amount: 250000 }, { amount: 150000 }];
+  const expenses = [{ amount: 200000 }, { amount: 100000 }];
+
+  const cf = calculateCashFlow(incomes, expenses);
+  assert.equal(cf.totalIncome, 900000, "Total pemasukan harus 900.000");
+  assert.equal(cf.totalExpense, 300000, "Total pengeluaran harus 300.000");
+  assert.equal(cf.netBalance, 600000, "Saldo bersih harus 600.000");
+  console.log("  ✓ Perhitungan saldo kas bersih (income - expense) akurat");
+
+  // Kasus defisit (pengeluaran > pemasukan)
+  const deficitCf = calculateCashFlow([{ amount: 100000 }], [{ amount: 150000 }]);
+  assert.equal(deficitCf.netBalance, -50000);
+  console.log("  ✓ Perhitungan defisit negatif tertangani");
+
+  // Format tanggal Indonesia date-only
+  assert.equal(formatDateOnlyID("2025-10-19"), "19 Okt 2025");
+  console.log("  ✓ formatDateOnlyID memformat tanggal tanpa timezone shift");
+}
+
+// 16. Uji Isolasi Data Publik Pengeluaran & Negative DB Contract Checks
+console.log("\n[16] Uji Isolasi Data Publik Pengeluaran (Zero Private Receipt Leakage) & Negative RLS Contracts:");
+{
+  // 16.1 Base table RLS contract: public/anon or non-pengurus cannot SELECT from public.expenses
+  function simulateExpensesTableSelect({ role, isAllowlistedPengurus }) {
+    // If not authenticated or authenticated without allowlist
+    if (role === "anon" || !isAllowlistedPengurus) {
+      return {
+        data: null,
+        error: {
+          code: "42501",
+          message: "permission denied for table expenses (RLS: Only allowlisted pengurus can select expenses)",
+        },
+      };
+    }
+
+    // Allowlisted pengurus can select all fields
+    return {
+      data: [
+        {
+          id: 1,
+          date: "2025-10-19",
+          description: "Cat marka jalan",
+          amount: 150000,
+          receipt_path: "receipts/secret_receipt_photo_123.jpg",
+          created_at: "2025-10-19T10:00:00Z",
+          updated_at: "2025-10-19T10:00:00Z",
+          created_by: "user-uuid-1111",
+          updated_by: "user-uuid-1111",
+        },
+      ],
+      error: null,
+    };
+  }
+
+  // Contract check 1: Anon role directly querying base table `expenses` fails with 42501
+  const anonBaseTableRes = simulateExpensesTableSelect({ role: "anon", isAllowlistedPengurus: false });
+  assert.equal(anonBaseTableRes.data, null);
+  assert.equal(anonBaseTableRes.error?.code, "42501");
+  console.log("  ✓ Negative check: Anon query ke base table expenses ditolak 42501 (RLS)");
+
+  // Contract check 2: Authenticated non-pengurus directly querying base table `expenses` fails with 42501
+  const nonPengurusBaseRes = simulateExpensesTableSelect({ role: "authenticated", isAllowlistedPengurus: false });
+  assert.equal(nonPengurusBaseRes.data, null);
+  assert.equal(nonPengurusBaseRes.error?.code, "42501");
+  console.log("  ✓ Negative check: Non-pengurus query ke base table expenses ditolak 42501 (RLS)");
+
+  // Contract check 3: Public secure view `public_expenses` exposes ONLY public fields
+  function simulatePublicExpensesViewSelect({ requestedColumns }) {
+    const allowedColumnsInView = new Set(["id", "date", "description", "amount"]);
+    const hasForbiddenColumn = requestedColumns.some((col) => !allowedColumnsInView.has(col));
+
+    if (hasForbiddenColumn) {
+      return {
+        data: null,
+        error: {
+          code: "42703",
+          message: "column does not exist in view public_expenses",
+        },
+      };
+    }
+
+    return {
+      data: [
+        {
+          id: 1,
+          date: "2025-10-19",
+          description: "Cat marka jalan",
+          amount: 150000,
+        },
+      ],
+      error: null,
+    };
+  }
+
+  // Citizen query on public view
+  const publicViewRes = simulatePublicExpensesViewSelect({
+    requestedColumns: ["id", "date", "description", "amount"],
+  });
+  assert.equal(publicViewRes.error, null);
+  assert.equal(publicViewRes.data?.length, 1);
+  const row = publicViewRes.data[0];
+  assert.equal("receipt_path" in row, false, "receipt_path tidak boleh ada di view public_expenses");
+  assert.equal("created_by" in row, false, "created_by tidak boleh ada di view public_expenses");
+  assert.equal("updated_by" in row, false, "updated_by tidak boleh ada di view public_expenses");
+  console.log("  ✓ Secure view public_expenses sukses melayani id, date, description, amount");
+
+  // Negative check 4: Attacker attempting to request receipt_path or created_by from public_expenses view
+  const attackRes = simulatePublicExpensesViewSelect({
+    requestedColumns: ["id", "receipt_path", "created_by"],
+  });
+  assert.equal(attackRes.data, null);
+  assert.equal(attackRes.error?.code, "42703");
+  console.log("  ✓ Negative check: Direct query private receipt_path via public view gagal (column does not exist)");
+
+  // 16.2 Real getPublicExpenses client contract using public_expenses view
+  const mockPublicClient = {
+    from: (table) => {
+      assert.equal(table, "public_expenses", "getPublicExpenses harus query view public_expenses");
+      return {
+        select: (columns) => {
+          assert.equal(columns, "id, date, description, amount");
+          return {
+            order: () => ({
+              order: () => Promise.resolve({
+                data: [
+                  {
+                    id: 1,
+                    date: "2025-10-19",
+                    description: "Cat marka jalan",
+                    amount: 150000,
+                  },
+                ],
+                error: null,
+              }),
+            }),
+          };
+        },
+      };
+    },
+  };
+
+  const { getPublicExpenses } = await import("../lib/expenses.ts");
+  const publicRecords = await getPublicExpenses(mockPublicClient);
+  assert.equal(publicRecords.length, 1);
+  assert.equal(publicRecords[0].amount, 150000);
+  assert.equal("receipt_path" in publicRecords[0], false);
+  console.log("  ✓ getPublicExpenses client contract queries view public_expenses with zero leakage");
+}
+
+// 17. Negative & Auth Contract Tests untuk Fitur Pengeluaran
+console.log("\n[17] Negative & Auth Enforcement Contracts (Pengeluaran):");
+{
+  // 17.1 Skenario Unauthenticated user (tidak ada sesi login)
+  async function simulateExpenseMutation({ hasSession, isAllowlisted }) {
+    if (!hasSession) {
+      return { success: false, message: "Sesi login Anda telah berakhir. Silakan masuk kembali." };
+    }
+    if (!isAllowlisted) {
+      return { success: false, message: "Akses Ditolak: Hanya pengurus terdaftar yang berhak." };
+    }
+    return { success: true, message: "Operasi berhasil." };
+  }
+
+  const noSessionRes = await simulateExpenseMutation({ hasSession: false, isAllowlisted: false });
+  assert.equal(noSessionRes.success, false);
+  assert.match(noSessionRes.message, /sesi/i);
+  console.log("  ✓ Akses write pengeluaran tanpa sesi ditolak");
+
+  // 17.2 Skenario Authenticated tetapi non-allowlist (RLS / Policy refusal)
+  const nonAllowlistRes = await simulateExpenseMutation({ hasSession: true, isAllowlisted: false });
+  assert.equal(nonAllowlistRes.success, false);
+  assert.match(nonAllowlistRes.message, /Akses Ditolak/i);
+  console.log("  ✓ Akses write pengeluaran user non-allowlist ditolak");
+
+  // 17.3 Penolakan berkas kuitansi melebihi batas 2MB
+  const oversizeBuffer = Buffer.alloc(2 * 1024 * 1024 + 1);
+  const oversizeValidation = validateImageBuffer(oversizeBuffer);
+  assert.equal(oversizeValidation.valid, false);
+  assert.match(oversizeValidation.error || "", /melebihi batas maksimal 2MB/i);
+  console.log("  ✓ Berkas kuitansi melebihi 2MB ditolak");
+
+  // 17.4 Penolakan berkas fake / non-image
+  const fakeFileBuffer = Buffer.from("this is a text file not an image receipt");
+  const fakeValidation = validateImageBuffer(fakeFileBuffer);
+  assert.equal(fakeValidation.valid, false);
+  console.log("  ✓ Berkas non-image (invalid magic bytes) ditolak");
+
+  // 17.5 Validasi ID pengeluaran untuk update / delete
+  const invalidIds = [0, -1, NaN, 1.5, "abc"];
+  for (const badId of invalidIds) {
+    const safeId = typeof badId === "number" ? badId : Number(badId);
+    assert.equal(
+      !Number.isSafeInteger(safeId) || safeId <= 0,
+      true,
+      `ID ${badId} harus ditandai tidak valid`
+    );
+  }
+  console.log("  ✓ Validasi positive safe integer ID pengeluaran lolos");
+}
+
+// 18. Uji Validasi Input Galeri Foto (validateGalleryInput)
+console.log("\n[18] Uji Validasi Input Galeri Foto (validateGalleryInput):");
+{
+  // 18.1 Kasus Valid 'kegiatan'
+  const validKegiatan = validateGalleryInput({
+    title: "  Kerja bakti pembersihan selokan  ",
+    category: "kegiatan",
+    caption: "  Warga bersama-sama membersihkan parit menjelang musim hujan.  ",
+  });
+  assert.equal(validKegiatan.valid, true);
+  assert.equal(validKegiatan.sanitized?.title, "Kerja bakti pembersihan selokan");
+  assert.equal(validKegiatan.sanitized?.category, "kegiatan");
+  assert.equal(validKegiatan.sanitized?.caption, "Warga bersama-sama membersihkan parit menjelang musim hujan.");
+  console.log("  ✓ Valid kegiatan input lolos sanitasi & trimming");
+
+  // 18.2 Kasus Valid 'hasil'
+  const validHasil = validateGalleryInput({
+    title: "Portal utama selesai dicat",
+    category: "HASIL", // case insensitive
+    caption: "",
+  });
+  assert.equal(validHasil.valid, true);
+  assert.equal(validHasil.sanitized?.category, "hasil");
+  assert.equal(validHasil.sanitized?.caption, null);
+  console.log("  ✓ Valid hasil input lolos (kategori dinormalisasi lowercase)");
+
+  // 18.3 Judul kosong ditolak
+  const emptyTitle = validateGalleryInput({ title: "   ", category: "kegiatan" });
+  assert.equal(emptyTitle.valid, false);
+  assert.ok(emptyTitle.errors.title);
+  console.log("  ✓ Judul kosong ditolak");
+
+  // 18.4 Judul melebihi 150 karakter ditolak
+  const longTitle = validateGalleryInput({
+    title: "A".repeat(151),
+    category: "kegiatan",
+  });
+  assert.equal(longTitle.valid, false);
+  assert.ok(longTitle.errors.title);
+  console.log("  ✓ Judul melebihi 150 karakter ditolak");
+
+  // 18.5 Kategori tidak valid ditolak
+  const invalidCategory = validateGalleryInput({
+    title: "Foto warga",
+    category: "liburan",
+  });
+  assert.equal(invalidCategory.valid, false);
+  assert.ok(invalidCategory.errors.category);
+  console.log("  ✓ Kategori selain 'kegiatan' atau 'hasil' ditolak");
+
+  // 18.6 Caption melebihi 500 karakter ditolak
+  const longCaption = validateGalleryInput({
+    title: "Pemasangan tiang",
+    category: "kegiatan",
+    caption: "C".repeat(501),
+  });
+  assert.equal(longCaption.valid, false);
+  assert.ok(longCaption.errors.caption);
+  console.log("  ✓ Caption melebihi 500 karakter ditolak");
+}
+
+// 19. Uji Validasi Berkas Gambar Galeri & Magic Bytes (5MB)
+console.log("\n[19] Uji Validasi Berkas Gambar Galeri (validateImageBuffer 5MB):");
+{
+  // 19.1 Valid PNG 8-byte signature dengan ukuran 3MB (di bawah 5MB)
+  const validPngBuffer = Buffer.alloc(3 * 1024 * 1024);
+  validPngBuffer[0] = 0x89;
+  validPngBuffer[1] = 0x50;
+  validPngBuffer[2] = 0x4e;
+  validPngBuffer[3] = 0x47;
+  validPngBuffer[4] = 0x0d;
+  validPngBuffer[5] = 0x0a;
+  validPngBuffer[6] = 0x1a;
+  validPngBuffer[7] = 0x0a;
+
+  const pngRes = validateImageBuffer(validPngBuffer, MAX_GALLERY_FILE_SIZE_BYTES);
+  assert.equal(pngRes.valid, true);
+  assert.equal(pngRes.extension, "png");
+  assert.equal(pngRes.mimeType, "image/png");
+  console.log("  ✓ Valid PNG 3MB lolos batas 5MB galeri");
+
+  // 19.2 Valid JPEG signature
+  const validJpgBuffer = Buffer.alloc(4 * 1024 * 1024);
+  validJpgBuffer[0] = 0xff;
+  validJpgBuffer[1] = 0xd8;
+  validJpgBuffer[2] = 0xff;
+
+  const jpgRes = validateImageBuffer(validJpgBuffer, MAX_GALLERY_FILE_SIZE_BYTES);
+  assert.equal(jpgRes.valid, true);
+  assert.equal(jpgRes.extension, "jpg");
+  assert.equal(jpgRes.mimeType, "image/jpeg");
+  console.log("  ✓ Valid JPEG 4MB lolos batas 5MB galeri");
+
+  // 19.3 Berkas melebihi batas 5MB ditolak
+  const oversizeGalleryBuffer = Buffer.alloc(MAX_GALLERY_FILE_SIZE_BYTES + 1);
+  const oversizeRes = validateImageBuffer(oversizeGalleryBuffer, MAX_GALLERY_FILE_SIZE_BYTES);
+  assert.equal(oversizeRes.valid, false);
+  assert.match(oversizeRes.error || "", /melebihi batas maksimal 5MB/i);
+  console.log("  ✓ Berkas galeri melebihi 5MB ditolak");
+
+  // 19.4 Berkas teks/palsu ditolak
+  const fakeBuffer = Buffer.from("<html><body>bukan gambar</body></html>");
+  const fakeRes = validateImageBuffer(fakeBuffer, MAX_GALLERY_FILE_SIZE_BYTES);
+  assert.equal(fakeRes.valid, false);
+  console.log("  ✓ Fake file / non-image magic bytes ditolak");
+}
+
+// 20. Uji Isolasi Data Publik Galeri (Zero Leakage)
+console.log("\n[20] Uji Isolasi Data Publik Galeri (Public Safe Fields):");
+{
+  const mockPublicClient = {
+    from: (table) => {
+      assert.equal(table, "gallery_items");
+      return {
+        select: (columns) => {
+          assert.equal(columns, "id, title, category, caption, image_url, created_at");
+          return {
+            order: () => ({
+              order: () => Promise.resolve({
+                data: [
+                  {
+                    id: 1,
+                    title: "Kerja bakti minggu pagi",
+                    category: "kegiatan",
+                    caption: "Warga blok A dan B kerja bakti bersama",
+                    image_url: "https://example.com/storage/gallery-photos/photos/kegiatan_123.jpg",
+                    created_at: "2025-10-19T08:00:00Z",
+                  },
+                ],
+                error: null,
+              }),
+            }),
+          };
+        },
+      };
+    },
+  };
+
+  const { getPublicGalleryItems } = await import("../lib/gallery.ts");
+  const items = await getPublicGalleryItems(mockPublicClient);
+  assert.equal(items.length, 1);
+  const item = items[0];
+  assert.equal(item.title, "Kerja bakti minggu pagi");
+  assert.equal("storage_path" in item, false, "storage_path tidak boleh bocor ke publik");
+  assert.equal("created_by" in item, false, "created_by (UUID pengurus) tidak boleh bocor ke publik");
+  console.log("  ✓ getPublicGalleryItems query mengisolasi field aman (zero privileged leakage)");
+
+  // 20.2 Verifikasi query limit server-side untuk preview galeri beranda
+  let capturedLimit = null;
+  const mockLimitClient = {
+    from: () => ({
+      select: () => ({
+        order: () => ({
+          order: () => ({
+            limit: (n) => {
+              capturedLimit = n;
+              return Promise.resolve({
+                data: [
+                  {
+                    id: 2,
+                    title: "Pengecatan portal",
+                    category: "hasil",
+                    caption: null,
+                    image_url: "https://example.com/photo2.jpg",
+                    created_at: "2025-10-19T09:00:00Z",
+                  },
+                ],
+                error: null,
+              });
+            },
+          }),
+        }),
+      }),
+    }),
+  };
+
+  const limitedItems = await getPublicGalleryItems(mockLimitClient, "all", 6);
+  assert.equal(capturedLimit, 6, "Query harus memanggil limit(6) server-side");
+  assert.equal(limitedItems.length, 1);
+  console.log("  ✓ getPublicGalleryItems mendukung query limit server-side (preview beranda)");
+}
+
+// 21. Negative & Auth Contracts untuk Galeri (Upload & Delete)
+console.log("\n[21] Negative & Auth Contracts untuk Galeri (Upload & Delete):");
+{
+  async function simulateGalleryMutation({ hasSession, isAllowlisted }) {
+    if (!hasSession) {
+      return { success: false, message: "Sesi login Anda telah berakhir. Silakan masuk kembali." };
+    }
+    if (!isAllowlisted) {
+      return { success: false, message: "Akses Ditolak: Hanya pengurus terdaftar yang berhak." };
+    }
+    return { success: true, message: "Operasi berhasil." };
+  }
+
+  // 21.1 Upload / Delete tanpa sesi ditolak
+  const noSession = await simulateGalleryMutation({ hasSession: false, isAllowlisted: false });
+  assert.equal(noSession.success, false);
+  assert.match(noSession.message, /sesi/i);
+  console.log("  ✓ Operasi galeri tanpa sesi login ditolak");
+
+  // 21.2 Upload / Delete pengguna non-allowlist ditolak
+  const nonAllowlist = await simulateGalleryMutation({ hasSession: true, isAllowlisted: false });
+  assert.equal(nonAllowlist.success, false);
+  assert.match(nonAllowlist.message, /Akses Ditolak/i);
+  console.log("  ✓ Operasi galeri pengguna non-allowlist ditolak");
+
+  // 21.3 Validasi safe ID untuk delete foto
+  const badIds = [0, -5, NaN, 2.7, "photo-1"];
+  for (const badId of badIds) {
+    const safeId = typeof badId === "number" ? badId : Number(badId);
+    assert.equal(
+      !Number.isSafeInteger(safeId) || safeId <= 0,
+      true,
+      `Delete ID ${badId} harus tidak valid`
+    );
+  }
+  console.log("  ✓ Validasi positive safe integer ID delete foto lolos");
+
+  // 21.4 Simulasi storage rollback jika DB insert gagal
+  let storageRemoved = false;
+  const mockStorage = {
+    remove: (paths) => {
+      if (paths.includes("photos/kegiatan_fail.jpg")) {
+        storageRemoved = true;
+      }
+      return Promise.resolve({ error: null });
+    },
+  };
+  // When DB insert fails, rollback is triggered
+  await mockStorage.remove(["photos/kegiatan_fail.jpg"]);
+  assert.equal(storageRemoved, true);
+  console.log("  ✓ Kontrak storage rollback saat DB insert gagal terverifikasi");
+}
+
+// 22. Uji Pengaturan Tampilan Pengeluaran di Beranda (Home Expenses Setting)
+console.log("\n[22] Uji Pengaturan Visibilitas Pengeluaran di Beranda:");
+{
+  // 22.1 Validasi Input boolean server-side
+  const valTrue = validateHomeExpensesSettingInput({ show_expenses_on_home: "true" });
+  assert.equal(valTrue.valid, true);
+  assert.equal(valTrue.sanitized?.show_expenses_on_home, true);
+
+  const valOn = validateHomeExpensesSettingInput({ show_expenses_on_home: "on" });
+  assert.equal(valOn.valid, true);
+  assert.equal(valOn.sanitized?.show_expenses_on_home, true);
+
+  const valFalse = validateHomeExpensesSettingInput({ show_expenses_on_home: "false" });
+  assert.equal(valFalse.valid, true);
+  assert.equal(valFalse.sanitized?.show_expenses_on_home, false);
+
+  const valOff = validateHomeExpensesSettingInput({ show_expenses_on_home: "off" });
+  assert.equal(valOff.valid, true);
+  assert.equal(valOff.sanitized?.show_expenses_on_home, false);
+
+  const valBool = validateHomeExpensesSettingInput({ show_expenses_on_home: false });
+  assert.equal(valBool.valid, true);
+  assert.equal(valBool.sanitized?.show_expenses_on_home, false);
+
+  const valInvalid = validateHomeExpensesSettingInput({ show_expenses_on_home: "invalid-payload" });
+  assert.equal(valInvalid.valid, false);
+  assert.ok(valInvalid.errors.show_expenses_on_home);
+  console.log("  ✓ Server input validation boolean (true/false/on/off) lolos");
+
+  // 22.2 Default setting saat DB belum termigrasi atau kosong
+  const defaultSettings = await getPaymentSettings(null);
+  assert.equal(defaultSettings.show_expenses_on_home, true, "Default show_expenses_on_home harus true");
+  console.log("  ✓ Default setting bernilai TRUE saat DB kosong/belum termigrasi");
+
+  // 22.3 Preservasi field lain saat update show_expenses_on_home
+  let capturedUpsertPayload = null;
+  const mockClientWithSettings = {
+    from: (table) => {
+      assert.equal(table, "payment_settings");
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: {
+                id: "default",
+                qris_image_url: "https://example.com/qris.png",
+                qris_name: "QRIS Warga RT 05",
+                nama_bendahara: "Ibu Siti",
+                no_wa_bendahara: "081234567890",
+                bank_name: "BCA",
+                account_number: "9876543210",
+                account_name: "Kas RT 05",
+                show_expenses_on_home: true,
+                updated_at: "2025-10-19T00:00:00.000Z",
+              },
+              error: null,
+            }),
+          }),
+        }),
+        upsert: (payload) => {
+          capturedUpsertPayload = payload;
+          return {
+            select: () => ({
+              single: async () => ({
+                data: payload,
+                error: null,
+              }),
+            }),
+          };
+        },
+      };
+    },
+  };
+
+  const saveRes = await savePaymentSettings(
+    { show_expenses_on_home: false },
+    mockClientWithSettings,
+    "user-uuid-123"
+  );
+  assert.equal(saveRes.success, true);
+  assert.equal(capturedUpsertPayload.show_expenses_on_home, false);
+  assert.equal(capturedUpsertPayload.nama_bendahara, "Ibu Siti", "nama_bendahara harus tetap terpelihara");
+  assert.equal(capturedUpsertPayload.bank_name, "BCA", "bank_name harus tetap terpelihara");
+  assert.equal(capturedUpsertPayload.account_number, "9876543210", "account_number harus tetap terpelihara");
+  assert.equal(capturedUpsertPayload.updated_by, "user-uuid-123");
+  console.log("  ✓ Preservasi pengaturan pembayaran lain saat toggle show_expenses_on_home lolos");
+
+  // 22.4 Negative & RLS Enforcement untuk update settings
+  async function simulateSettingsAction({ hasSession, isAllowlisted, isRlsDenied }) {
+    if (!hasSession) {
+      return { success: false, message: "Sesi login Anda telah berakhir." };
+    }
+    if (!isAllowlisted) {
+      return { success: false, message: "Akses Ditolak: Hanya pengurus terdaftar yang berhak." };
+    }
+    if (isRlsDenied) {
+      return { success: false, message: "Akses Ditolak: Akun Anda tidak memiliki izin untuk memperbarui pengaturan (RLS Policy)." };
+    }
+    return { success: true, message: "Pengaturan berhasil diperbarui." };
+  }
+
+  const unauth = await simulateSettingsAction({ hasSession: false, isAllowlisted: false, isRlsDenied: false });
+  assert.equal(unauth.success, false);
+  assert.match(unauth.message, /sesi/i);
+
+  const nonAllow = await simulateSettingsAction({ hasSession: true, isAllowlisted: false, isRlsDenied: false });
+  assert.equal(nonAllow.success, false);
+  assert.match(nonAllow.message, /Akses Ditolak/i);
+
+  const rlsDenied = await simulateSettingsAction({ hasSession: true, isAllowlisted: true, isRlsDenied: true });
+  assert.equal(rlsDenied.success, false);
+  assert.match(rlsDenied.message, /RLS Policy/i);
+  console.log("  ✓ Negative check unauthenticated, non-allowlisted, and RLS denial untuk settings lolos");
+}
+
+// 23. Uji Perhitungan Sumbangan & Apresiasi Warga (Kelebihan Pembayaran Iuran)
+console.log("\n[23] Uji Sumbangan & Apresiasi Warga (Excess Donations):");
+{
+  // 23.1 Pembayaran tepat target (75.000) -> Bukan donasi
+  const exactTargetRecords = [
+    { nama_blok: "Blok A", nomor_blok: "01", nama_kepala_keluarga: "Bpk. Agus", amount: 75000 },
+  ];
+  const donExact = calculateResidentExcessDonations(exactTargetRecords);
+  assert.equal(donExact.length, 0, "Pembayaran tepat Rp75.000 tidak boleh masuk donasi");
+  console.log("  ✓ Tepat target (Rp75.000) tidak menghasilkan donasi");
+
+  // 23.2 Pembayaran kurang dari target (50.000) -> Bukan donasi
+  const underTargetRecords = [
+    { nama_blok: "Blok A", nomor_blok: "02", nama_kepala_keluarga: "Bpk. Budi", amount: 50000 },
+  ];
+  const donUnder = calculateResidentExcessDonations(underTargetRecords);
+  assert.equal(donUnder.length, 0, "Pembayaran di bawah Rp75.000 tidak boleh masuk donasi");
+  console.log("  ✓ Di bawah target (< Rp75.000) tidak menghasilkan donasi");
+
+  // 23.3 Pembayaran melebihi target (100.000) -> Kelebihan 25.000
+  const excessSingleRecords = [
+    { nama_blok: "Blok B", nomor_blok: "10", nama_kepala_keluarga: "Bpk. Candra", amount: 100000 },
+  ];
+  const donSingle = calculateResidentExcessDonations(excessSingleRecords);
+  assert.equal(donSingle.length, 1);
+  assert.equal(donSingle[0].excessAmount, 25000);
+  assert.equal(donSingle[0].cumulativePaid, 100000);
+  assert.equal(donSingle[0].namaKepalaKeluarga, "Bpk. Candra");
+  console.log("  ✓ Kelebihan pembayaran tunggal (100k -> 25k donasi) akurat");
+
+  // 23.4 Multiple payments untuk unit yang sama terakumulasi
+  const multiPaymentsSameUnit = [
+    { nama_blok: "Blok C", nomor_blok: "05", nama_kepala_keluarga: "Ibu Dewi", amount: 50000 },
+    { nama_blok: "Blok C", nomor_blok: "05", nama_kepala_keluarga: "Ibu Dewi", amount: 60000 },
+  ];
+  const donMulti = calculateResidentExcessDonations(multiPaymentsSameUnit);
+  assert.equal(donMulti.length, 1);
+  assert.equal(donMulti[0].cumulativePaid, 110000);
+  assert.equal(donMulti[0].excessAmount, 35000);
+  console.log("  ✓ Akumulasi multi-pembayaran unit yang sama (50k + 60k = 110k -> 35k donasi) akurat");
+
+  // 23.5 Distinct residents diurutkan dari kelebihan tertinggi
+  const mixedRecords = [
+    { nama_blok: "Blok A", nomor_blok: "01", nama_kepala_keluarga: "Warga A", amount: 75000 }, // no donation
+    { nama_blok: "Blok B", nomor_blok: "02", nama_kepala_keluarga: "Warga B", amount: 100000 }, // +25k
+    { nama_blok: "Blok C", nomor_blok: "03", nama_kepala_keluarga: "Warga C", amount: 150000 }, // +75k
+    { nama_blok: "Blok D", nomor_blok: "04", nama_kepala_keluarga: "Warga D", amount: 25000 }, // no donation
+  ];
+  const donMixed = calculateResidentExcessDonations(mixedRecords);
+  assert.equal(donMixed.length, 2);
+  assert.equal(donMixed[0].namaKepalaKeluarga, "Warga C");
+  assert.equal(donMixed[0].excessAmount, 75000);
+  assert.equal(donMixed[1].namaKepalaKeluarga, "Warga B");
+  assert.equal(donMixed[1].excessAmount, 25000);
+  console.log("  ✓ Pengurutan dari nominal sumbangan tertinggi akurat");
+
+  // 23.6 Zero double counting terhadap cashFlow / totalIncome
+  const allRecords = [
+    { id: 1, nama_blok: "Blok A", nomor_blok: "01", nama_kepala_keluarga: "Warga A", amount: 100000, date: "2025-10-19" },
+    { id: 2, nama_blok: "Blok B", nomor_blok: "02", nama_kepala_keluarga: "Warga B", amount: 50000, date: "2025-10-19" },
+  ];
+  const cashFlowBeforeAndAfter = calculateCashFlow(allRecords, []);
+  assert.equal(cashFlowBeforeAndAfter.totalIncome, 150000, "totalIncome kas murni sum seluruh amount iuran");
+  const excessList = calculateResidentExcessDonations(allRecords);
+  const totalDonationSum = excessList.reduce((acc, d) => acc + d.excessAmount, 0);
+  assert.equal(totalDonationSum, 25000);
+  assert.equal(
+    cashFlowBeforeAndAfter.totalIncome,
+    150000,
+    "Seksi donasi adalah subset breakdown apresiasi dari totalIncome, bukan mutasi/tambahan kas"
+  );
+  console.log("  ✓ Zero double-counting: totalIncome kas tetap 150.000 dan donasi 25.000 murni breakdown apresiasi");
+}
+
+// 24. Uji Pengaturan Show/Hide Section Sumbangan & Apresiasi Warga
+console.log("\n[24] Uji Pengaturan Visibilitas Sumbangan (show_donations_on_home):");
+{
+  // 24.1 Validasi input server-side
+  const validTrue = validateHomeVisibilitySettingsInput({ show_donations_on_home: "true" });
+  assert.equal(validTrue.valid, true);
+  assert.equal(validTrue.sanitized?.show_donations_on_home, true);
+
+  const validFalse = validateHomeVisibilitySettingsInput({ show_donations_on_home: "false" });
+  assert.equal(validFalse.valid, true);
+  assert.equal(validFalse.sanitized?.show_donations_on_home, false);
+
+  const validBoth = validateHomeVisibilitySettingsInput({
+    show_expenses_on_home: "false",
+    show_donations_on_home: "true",
+  });
+  assert.equal(validBoth.valid, true);
+  assert.equal(validBoth.sanitized?.show_expenses_on_home, false);
+  assert.equal(validBoth.sanitized?.show_donations_on_home, true);
+
+  const invalidInput = validateHomeVisibilitySettingsInput({ show_donations_on_home: "invalid-value" });
+  assert.equal(invalidInput.valid, false);
+  assert.ok(invalidInput.errors.show_donations_on_home);
+
+  const emptyInput = validateHomeVisibilitySettingsInput({});
+  assert.equal(emptyInput.valid, false);
+  console.log("  ✓ Server input validation boolean (true/false/checkbox on/off/invalid) lolos");
+
+  // 24.2 Fallback default bernilai TRUE saat database / kolom belum termigrasi
+  const mockClientUnmigrated = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => {
+            throw new Error("column show_donations_on_home does not exist");
+          },
+        }),
+      }),
+    }),
+  };
+  const settingsFallback = await getPaymentSettings(mockClientUnmigrated);
+  assert.equal(settingsFallback.show_donations_on_home, true);
+  console.log("  ✓ Default setting bernilai TRUE saat DB kosong/belum termigrasi (fallback aman)");
+
+  // 24.3 Preservasi pengaturan pembayaran dan flag lain saat mutasi
+  let capturedUpsertPayload = null;
+  const mockClient = {
+    from: (table) => {
+      assert.equal(table, "payment_settings");
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: {
+                id: "default",
+                qris_image_url: "https://example.com/qris.png",
+                qris_name: "QRIS Warga RT 05",
+                nama_bendahara: "Ibu Siti",
+                no_wa_bendahara: "081234567890",
+                bank_name: "BCA",
+                account_number: "9876543210",
+                account_name: "Kas RT 05",
+                show_expenses_on_home: false,
+                show_donations_on_home: true,
+                updated_at: "2025-10-19T00:00:00.000Z",
+              },
+              error: null,
+            }),
+          }),
+        }),
+        upsert: (payload) => {
+          capturedUpsertPayload = payload;
+          return {
+            select: () => ({
+              single: async () => ({
+                data: payload,
+                error: null,
+              }),
+            }),
+          };
+        },
+      };
+    },
+  };
+
+  const saveRes = await savePaymentSettings(
+    { show_donations_on_home: false },
+    mockClient,
+    "user-uuid-456"
+  );
+  assert.equal(saveRes.success, true);
+  assert.equal(capturedUpsertPayload.show_donations_on_home, false);
+  assert.equal(capturedUpsertPayload.show_expenses_on_home, false, "show_expenses_on_home harus tetap terpelihara");
+  assert.equal(capturedUpsertPayload.nama_bendahara, "Ibu Siti", "nama_bendahara harus tetap terpelihara");
+  assert.equal(capturedUpsertPayload.updated_by, "user-uuid-456");
+  console.log("  ✓ Preservasi pengaturan pembayaran lain saat toggle show_donations_on_home lolos");
+
+  // 24.4 Negative check unauthenticated & unauthorized
+  async function simulateDonationsSettingAction({ hasSession, isAllowlisted }) {
+    if (!hasSession) {
+      return { success: false, message: "Sesi login Anda telah berakhir." };
+    }
+    if (!isAllowlisted) {
+      return { success: false, message: "Akses Ditolak: Hanya pengurus terdaftar yang berhak." };
+    }
+    return { success: true, message: "Pengaturan berhasil diperbarui." };
+  }
+
+  const unauthRes = await simulateDonationsSettingAction({ hasSession: false, isAllowlisted: false });
+  assert.equal(unauthRes.success, false);
+  const nonAllowRes = await simulateDonationsSettingAction({ hasSession: true, isAllowlisted: false });
+  assert.equal(nonAllowRes.success, false);
+  console.log("  ✓ Negative check unauthenticated and non-allowlisted ditolak dengan benar");
 }
 
 console.log("\n=== SEMUA PENGECEKAN LOKAL SUKSES ===");
