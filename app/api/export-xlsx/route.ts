@@ -4,6 +4,11 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { formatDateID } from "@/lib/format";
 import type { IuranRecord } from "@/lib/types";
+import {
+  calculateResidentTotals,
+  calculateResidentDuesStatus,
+  getResidentKey,
+} from "@/lib/dues";
 
 // ponytail: Generates XLSX in-memory using SheetJS. Upgrade to streaming workbook if records exceed 50k rows.
 export async function GET() {
@@ -36,15 +41,25 @@ export async function GET() {
   }
 
   const records = (data as IuranRecord[]) || [];
+  const residentTotals = calculateResidentTotals(records);
 
-  const rows = records.map((item, index) => ({
-    No: index + 1,
-    "Nama Blok": item.nama_blok,
-    "Nomor Blok": item.nomor_blok,
-    "Nama Kepala Keluarga": item.nama_kepala_keluarga || "-",
-    "Jumlah (Rp)": item.amount,
-    "Waktu Pencatatan": formatDateID(item.created_at),
-  }));
+  const rows = records.map((item, index) => {
+    const rKey = getResidentKey(item);
+    const cumulative = residentTotals.get(rKey) || Number(item.amount || 0);
+    const duesStatus = calculateResidentDuesStatus(cumulative);
+
+    return {
+      No: index + 1,
+      "Nama Blok": item.nama_blok,
+      "Nomor Rumah": item.nomor_blok,
+      "Nama Kepala Keluarga": item.nama_kepala_keluarga || "-",
+      "Jumlah (Rp)": item.amount,
+      Tahap: duesStatus.stageLabel,
+      "Target (Rp)": duesStatus.target,
+      "Sisa Tagihan (Rp)": duesStatus.outstandingBalance,
+      "Waktu Pencatatan": formatDateID(item.created_at),
+    };
+  });
 
   const totalAmount = records.reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
@@ -52,9 +67,12 @@ export async function GET() {
   rows.push({
     No: 0,
     "Nama Blok": "",
-    "Nomor Blok": "",
+    "Nomor Rumah": "",
     "Nama Kepala Keluarga": "TOTAL TERKUMPUL",
     "Jumlah (Rp)": totalAmount,
+    Tahap: "",
+    "Target (Rp)": 0,
+    "Sisa Tagihan (Rp)": 0,
     "Waktu Pencatatan": "",
   });
 
@@ -66,6 +84,9 @@ export async function GET() {
     { wch: 18 },
     { wch: 18 },
     { wch: 26 },
+    { wch: 18 },
+    { wch: 22 },
+    { wch: 16 },
     { wch: 18 },
     { wch: 24 },
   ];

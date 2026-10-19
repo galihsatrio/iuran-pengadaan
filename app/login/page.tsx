@@ -1,14 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 // ponytail: Basic email/password authentication using Supabase Auth. Upgrade to MFA or OAuth if neighborhood committee requires enterprise SSO.
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -52,8 +50,10 @@ export default function LoginPage() {
       }
 
       if (data?.user) {
-        router.push("/pengurus");
-        router.refresh();
+        // Full document navigation ensures fresh cookies reach server and avoids stale Next router cache
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+        window.location.assign("/pengurus");
+        return;
       }
     } catch (err: unknown) {
       setErrorMsg(
@@ -72,9 +72,12 @@ export default function LoginPage() {
           </div>
         </div>
         <h1 className="mt-4 text-center text-2xl font-bold tracking-tight text-slate-900">
-          Masuk Area Pengurus
+          Iuran Warga Pengadaan Portal
         </h1>
-        <p className="mt-2 text-center text-sm text-slate-600">
+        <h2 className="mt-2 text-center text-base font-semibold text-slate-700">
+          Masuk Area Pengurus
+        </h2>
+        <p className="mt-1 text-center text-sm text-slate-600">
           Khusus panitia & pengurus untuk mencatat iuran warga
         </p>
       </div>
@@ -115,7 +118,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="pengurus@lingkungan.id"
-                  className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-emerald-600 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 text-sm shadow-xs"
+                  className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-emerald-600 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 text-base sm:text-sm shadow-xs"
                 />
               </div>
             </div>
@@ -137,7 +140,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-emerald-600 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 text-sm shadow-xs"
+                  className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-emerald-600 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 text-base sm:text-sm shadow-xs"
                 />
               </div>
             </div>
@@ -146,7 +149,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading || !configured}
-                className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-xs text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-full flex justify-center items-center py-2.5 px-4 min-h-[44px] border border-transparent rounded-lg shadow-xs text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
                 {loading ? "Memverifikasi..." : "Masuk"}
               </button>
@@ -160,7 +163,7 @@ export default function LoginPage() {
             </p>
             <Link
               href="/"
-              className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline"
+              className="min-h-[44px] inline-flex items-center text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline"
             >
               &larr; Kembali ke Rekap Warga
             </Link>

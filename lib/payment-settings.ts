@@ -6,6 +6,8 @@ export const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
 export const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
   qris_image_url: "",
   qris_name: "QRIS Pembayaran Iuran Warga",
+  nama_bendahara: "",
+  no_wa_bendahara: "",
   bank_name: "Bank BCA",
   account_number: "123-456-7890",
   account_name: "Kas Paguyuban Warga",
@@ -22,7 +24,7 @@ export async function getPaymentSettings(
   try {
     const { data, error } = await client
       .from("payment_settings")
-      .select("qris_image_url, qris_name, bank_name, account_number, account_name, updated_at")
+      .select("qris_image_url, qris_name, nama_bendahara, no_wa_bendahara, bank_name, account_number, account_name, updated_at")
       .eq("id", "default")
       .maybeSingle();
 
@@ -30,6 +32,8 @@ export async function getPaymentSettings(
       return {
         qris_image_url: data.qris_image_url || DEFAULT_PAYMENT_SETTINGS.qris_image_url,
         qris_name: data.qris_name || DEFAULT_PAYMENT_SETTINGS.qris_name,
+        nama_bendahara: data.nama_bendahara ?? DEFAULT_PAYMENT_SETTINGS.nama_bendahara,
+        no_wa_bendahara: data.no_wa_bendahara ?? DEFAULT_PAYMENT_SETTINGS.no_wa_bendahara,
         bank_name: data.bank_name ?? DEFAULT_PAYMENT_SETTINGS.bank_name,
         account_number: data.account_number ?? DEFAULT_PAYMENT_SETTINGS.account_number,
         account_name: data.account_name ?? DEFAULT_PAYMENT_SETTINGS.account_name,
@@ -61,6 +65,8 @@ export async function savePaymentSettings(
       id: "default",
       qris_image_url: updates.qris_image_url !== undefined ? updates.qris_image_url : current.qris_image_url,
       qris_name: updates.qris_name !== undefined ? updates.qris_name : current.qris_name,
+      nama_bendahara: updates.nama_bendahara !== undefined ? updates.nama_bendahara : current.nama_bendahara,
+      no_wa_bendahara: updates.no_wa_bendahara !== undefined ? updates.no_wa_bendahara : current.no_wa_bendahara,
       bank_name: updates.bank_name !== undefined ? updates.bank_name : current.bank_name,
       account_number: updates.account_number !== undefined ? updates.account_number : current.account_number,
       account_name: updates.account_name !== undefined ? updates.account_name : current.account_name,
@@ -74,7 +80,7 @@ export async function savePaymentSettings(
     const { data, error } = await client
       .from("payment_settings")
       .upsert(merged, { onConflict: "id" })
-      .select("qris_image_url, qris_name, bank_name, account_number, account_name, updated_at")
+      .select("qris_image_url, qris_name, nama_bendahara, no_wa_bendahara, bank_name, account_number, account_name, updated_at")
       .single();
 
     if (error) {

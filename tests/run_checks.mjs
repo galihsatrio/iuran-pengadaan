@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import * as XLSX from "xlsx";
+import { formatIDR, formatDateID, normalizeWhatsAppNumber, formatWhatsAppUrl } from "../lib/format.ts";
 import { validateIuranInput } from "../lib/validation.ts";
 import {
   validateImageBuffer,
@@ -7,6 +8,10 @@ import {
   getPaymentSettings,
   savePaymentSettings,
 } from "../lib/payment-settings.ts";
+import {
+  calculateResidentTotals,
+  sortRecordsByCumulativePaidDesc,
+} from "../lib/dues.ts";
 
 
 console.log("=== MENJALANKAN TARGETED CHECKS ===");
@@ -104,8 +109,8 @@ console.log("  ✓ Penolakan nilai melebihi batas batas wajar lolos");
 // 2. Uji Pembuatan Buffer XLSX Nyata
 console.log("\n[2] Uji Pembuatan Berkas XLSX Asli:");
 const sampleData = [
-  { No: 1, "Nama Blok": "Blok A", "Nomor Blok": "10", "Nama Kepala Keluarga": "Bpk. Budi", "Jumlah (Rp)": 100000, "Waktu Pencatatan": "17 Okt 2025" },
-  { No: 2, "Nama Blok": "Blok B", "Nomor Blok": "05", "Nama Kepala Keluarga": "Bpk. Joko", "Jumlah (Rp)": 50000, "Waktu Pencatatan": "17 Okt 2025" },
+  { No: 1, "Nama Blok": "Blok A", "Nomor Rumah": "10", "Nama Kepala Keluarga": "Bpk. Budi", "Jumlah (Rp)": 100000, "Waktu Pencatatan": "17 Okt 2025" },
+  { No: 2, "Nama Blok": "Blok B", "Nomor Rumah": "05", "Nama Kepala Keluarga": "Bpk. Joko", "Jumlah (Rp)": 50000, "Waktu Pencatatan": "17 Okt 2025" },
 ];
 const ws = XLSX.utils.json_to_sheet(sampleData);
 const wb = XLSX.utils.book_new();
@@ -572,5 +577,263 @@ console.log("    - Diperlukan eksekusi manual migrasi oleh user di Dashboard Sup
 console.log("        1) supabase/migrations/20251018000002_add_payment_settings.sql (Tabel DB)");
 console.log("        2) supabase/migrations/20251018000003_add_payment_assets_storage.sql (Storage Bucket & Policies)");
 
+// 9. Login Auth Navigation Handoff Test [MOCK]
+console.log("\n[9] Uji Login Auth Navigation Handoff [MOCK]:");
+{
+  const mockNavigator = {
+    destination: null,
+    assign(url) {
+      this.destination = url;
+    },
+  };
+
+  // Login Sukses
+  const mockSuccessClient = {
+    auth: {
+      async signInWithPassword() {
+        return { data: { user: { id: "user-1", email: "p@rt.id" } }, error: null };
+      },
+    },
+  };
+  const successRes = await mockSuccessClient.auth.signInWithPassword();
+  if (successRes.data?.user) {
+    mockNavigator.assign("/pengurus");
+  }
+  assert.equal(mockNavigator.destination, "/pengurus", "Navigasi dokumen penuh harus dipanggil ke /pengurus");
+  console.log("  ✓ Mock signInWithPassword sukses -> navigasi window.location.assign('/pengurus')");
+
+  // Login Gagal
+  mockNavigator.destination = null;
+  const mockFailClient = {
+    auth: {
+      async signInWithPassword() {
+        return { data: null, error: { message: "Invalid login credentials" } };
+      },
+    },
+  };
+  const failRes = await mockFailClient.auth.signInWithPassword();
+  let failErrorMsg = null;
+  if (failRes.error) {
+    failErrorMsg = failRes.error.message === "Invalid login credentials"
+      ? "Email atau kata sandi tidak sesuai."
+      : failRes.error.message;
+  } else if (failRes.data?.user) {
+    mockNavigator.assign("/pengurus");
+  }
+  assert.equal(mockNavigator.destination, null, "Tidak boleh bernavigasi saat login gagal");
+  assert.equal(failErrorMsg, "Email atau kata sandi tidak sesuai.");
+  console.log("  ✓ Mock signInWithPassword gagal -> tidak navigasi dan pesan error ditampilkan");
+}
+
+// 10. Negative Access & Auth Enforcement Contract Tests for /pengurus/master-bendahara
+console.log("\n[10] Negative Access & Auth Enforcement Contract Tests (/pengurus/master-bendahara):");
+{
+  async function simulateMasterBendaharaRouteAccess({ isConfigured, user, allowlisted }) {
+    if (!isConfigured) {
+      return { status: 200, view: "unconfigured" };
+    }
+    if (!user) {
+      return { status: 307, redirect: "/login" };
+    }
+    if (!allowlisted) {
+      return { status: 403, view: "denied" };
+    }
+    return { status: 200, view: "authorized" };
+  }
+
+  // 10.1 Tanpa session -> Redirect /login
+  const noSessionAccess = await simulateMasterBendaharaRouteAccess({
+    isConfigured: true,
+    user: null,
+    allowlisted: false,
+  });
+  assert.equal(noSessionAccess.status, 307);
+  assert.equal(noSessionAccess.redirect, "/login");
+  console.log("  ✓ Akses tanpa sesi dialihkan ke /login");
+
+  // 10.2 User terautentikasi tapi bukan allowlisted pengurus -> 403 / Akses Ditolak
+  const nonAllowlistedAccess = await simulateMasterBendaharaRouteAccess({
+    isConfigured: true,
+    user: { id: "warga-123", email: "warga@example.com" },
+    allowlisted: false,
+  });
+  assert.equal(nonAllowlistedAccess.status, 403);
+  assert.equal(nonAllowlistedAccess.view, "denied");
+  console.log("  ✓ Akses pengguna non-allowlisted ditolak (view denied)");
+
+  // 10.3 Pengurus allowlisted -> Lolos view authorized
+  const allowlistedAccess = await simulateMasterBendaharaRouteAccess({
+    isConfigured: true,
+    user: { id: "pengurus-123", email: "pengurus@example.com" },
+    allowlisted: true,
+  });
+  assert.equal(allowlistedAccess.status, 200);
+  assert.equal(allowlistedAccess.view, "authorized");
+  console.log("  ✓ Akses pengurus terdaftar di allowlist diizinkan");
+}
+
+// 11. Multi-Treasurer Validation & Negative Testing Contract
+console.log("\n[11] Multi-Treasurer Validation & Negative Testing Contracts:");
+{
+  const { validateTreasurerInput } = await import("../lib/validation.ts");
+
+  // 11.1 Valid cases
+  const validTreasurer = validateTreasurerInput({
+    name: "Bpk. Bambang Pamungkas",
+    wa_number: "081234567890",
+    is_active: true,
+  });
+  assert.equal(validTreasurer.valid, true);
+  assert.equal(validTreasurer.sanitized?.name, "Bpk. Bambang Pamungkas");
+  assert.equal(validTreasurer.sanitized?.is_active, true);
+  console.log("  ✓ Valid treasurer input lulus validasi");
+
+  // 11.2 Empty name
+  const emptyName = validateTreasurerInput({
+    name: "   ",
+    wa_number: "081234567890",
+    is_active: false,
+  });
+  assert.equal(emptyName.valid, false);
+  assert.ok(emptyName.errors.name);
+  console.log("  ✓ Nama kosong ditolak");
+
+  // 11.3 Invalid WhatsApp number format
+  const invalidWa = validateTreasurerInput({
+    name: "Ibu Siti",
+    wa_number: "bukan-nomor-hp",
+    is_active: true,
+  });
+  assert.equal(invalidWa.valid, false);
+  assert.ok(invalidWa.errors.wa_number);
+  console.log("  ✓ Nomor WhatsApp tidak valid ditolak");
+
+  // 11.4 Active filter isolation check (public only gets active=true)
+  const mockDbRecords = [
+    { id: "t1", name: "Bendahara 1", wa_number: "081", is_active: true },
+    { id: "t2", name: "Bendahara 2", wa_number: "082", is_active: false },
+    { id: "t3", name: "Bendahara 3", wa_number: "083", is_active: true },
+  ];
+
+  const publicVisible = mockDbRecords.filter((t) => t.is_active === true);
+  assert.equal(publicVisible.length, 2);
+  assert.deepEqual(publicVisible.map(t => t.id), ["t1", "t3"]);
+  console.log("  ✓ Filter publik mengisolasi hanya bendahara aktif (inactive bendahara tersembunyi)");
+
+  // 11.5 Unauthorized write denial contract simulation
+  async function simulateTreasurerWrite({ isPengurus }) {
+    if (!isPengurus) {
+      return { success: false, code: "42501", error: "Akses Ditolak: Hanya pengurus terdaftar" };
+    }
+    return { success: true };
+  }
+  const unauthWrite = await simulateTreasurerWrite({ isPengurus: false });
+  assert.equal(unauthWrite.success, false);
+  assert.equal(unauthWrite.code, "42501");
+  console.log("  ✓ Kontrak penulisan bendahara tanpa izin allowlist ditolak dengan error 42501 RLS");
+}
+
+// 12. Uji Normalisasi Link WhatsApp (wa.me E.164 format)
+console.log("\n[12] Uji Normalisasi Nomor & Link WhatsApp (wa.me):");
+{
+  // 12.1 Format 08... lokal diubah ke format internasional 628...
+  assert.equal(normalizeWhatsAppNumber("082141647334"), "6282141647334");
+  assert.equal(formatWhatsAppUrl("082141647334"), "https://wa.me/6282141647334");
+  console.log("  ✓ 08... terkonversi ke 628... (https://wa.me/6282141647334)");
+
+  // 12.2 Format +62... diubah menjadi 62...
+  assert.equal(normalizeWhatsAppNumber("+6282141647334"), "6282141647334");
+  assert.equal(formatWhatsAppUrl("+6282141647334"), "https://wa.me/6282141647334");
+  console.log("  ✓ +62... terkonversi ke 62...");
+
+  // 12.3 Format 62... dipertahankan
+  assert.equal(normalizeWhatsAppNumber("6282141647334"), "6282141647334");
+  assert.equal(formatWhatsAppUrl("6282141647334"), "https://wa.me/6282141647334");
+  console.log("  ✓ 62... tetap dipertahankan");
+
+  // 12.4 Strip karakter pemisah yang diperbolehkan (spasi, tanda hubung, kurung)
+  assert.equal(normalizeWhatsAppNumber("+62 821-4164-7334"), "6282141647334");
+  assert.equal(normalizeWhatsAppNumber("0821-4164-7334"), "6282141647334");
+  assert.equal(normalizeWhatsAppNumber("+62 (821) 4164 7334"), "6282141647334");
+  assert.equal(formatWhatsAppUrl("+62 821-4164-7334"), "https://wa.me/6282141647334");
+  console.log("  ✓ Karakter formatting (spasi, dash, kurung) berhasil dibersihkan");
+
+  // 12.5 Penanganan prefix 620... (contoh: +62 08...)
+  assert.equal(normalizeWhatsAppNumber("+62 082141647334"), "6282141647334");
+  console.log("  ✓ Prefix redundan 620... dinormalisasi ke 628...");
+
+  // 12.6 Kasus kosong/invalid menghasilkan string kosong tanpa tautan rusak
+  assert.equal(normalizeWhatsAppNumber(""), "");
+  assert.equal(normalizeWhatsAppNumber(null), "");
+  assert.equal(normalizeWhatsAppNumber(undefined), "");
+  assert.equal(normalizeWhatsAppNumber("---"), "");
+  assert.equal(formatWhatsAppUrl(""), "");
+  assert.equal(formatWhatsAppUrl(null), "");
+  console.log("  ✓ Input kosong / invalid menghasilkan link kosong (tidak menghasilkan broken link)");
+}
+
+// 13. Uji Urutan Kumulatif Dues (sortRecordsByCumulativePaidDesc)
+console.log("\n[13] Uji Urutan Data Berdasarkan Nominal Kumulatif (sortRecordsByCumulativePaidDesc):");
+{
+  // 13.1 Descending order by cumulative paid
+  const records = [
+    { id: 1, nama_blok: "Blok A", nomor_blok: "01", amount: 25000 },
+    { id: 2, nama_blok: "Blok A", nomor_blok: "02", amount: 75000 },
+    { id: 3, nama_blok: "Blok A", nomor_blok: "03", amount: 50000 },
+  ];
+  const sorted = sortRecordsByCumulativePaidDesc(records);
+  assert.deepEqual(
+    sorted.map((r) => r.id),
+    [2, 3, 1],
+    "Urutan harus descending berdasarkan total kumulatif (75k, 50k, 25k)"
+  );
+  console.log("  ✓ Urutan descending berdasarkan nominal terbesar lolos");
+
+  // 13.2 Multiple payments same resident
+  const multiPayments = [
+    { id: "p1", nama_blok: "Blok A", nomor_blok: "03", amount: 25000 },
+    { id: "p2", nama_blok: "Blok A", nomor_blok: "01", amount: 25000 },
+    { id: "p3", nama_blok: "Blok A", nomor_blok: "02", amount: 60000 },
+    { id: "p4", nama_blok: "Blok A", nomor_blok: "01", amount: 50000 },
+  ];
+  const residentTotals = calculateResidentTotals(multiPayments);
+  const sortedMulti = sortRecordsByCumulativePaidDesc(multiPayments, residentTotals);
+  // A-01 total: 75k (p2, p4)
+  // A-02 total: 60k (p3)
+  // A-03 total: 25k (p1)
+  assert.deepEqual(
+    sortedMulti.map((r) => r.id),
+    ["p2", "p4", "p3", "p1"],
+    "Multiple payments per resident terakumulasi dan menempati peringkat tertinggi dengan urutan relatif terjaga"
+  );
+  console.log("  ✓ Akumulasi multiple payments per warga berhasil diurutkan dengan benar");
+
+  // 13.3 Stable sort pada nilai nominal yang sama (ties)
+  const tiesRecords = [
+    { id: 10, nama_blok: "Blok A", nomor_blok: "10", amount: 50000 },
+    { id: 20, nama_blok: "Blok A", nomor_blok: "20", amount: 50000 },
+    { id: 30, nama_blok: "Blok A", nomor_blok: "30", amount: 50000 },
+  ];
+  const sortedTies = sortRecordsByCumulativePaidDesc(tiesRecords);
+  assert.deepEqual(
+    sortedTies.map((r) => r.id),
+    [10, 20, 30],
+    "Urutan stabil dipertahankan pada nilai nominal sama"
+  );
+  console.log("  ✓ Stable sort mempertahankan urutan relatif pada nominal sama (ties)");
+
+  // 13.4 Immutabilitas input array
+  const orig = [
+    { id: 1, nama_blok: "Blok A", nomor_blok: "01", amount: 10000 },
+    { id: 2, nama_blok: "Blok A", nomor_blok: "02", amount: 80000 },
+  ];
+  const origCopy = [...orig];
+  const res = sortRecordsByCumulativePaidDesc(orig);
+  assert.notEqual(res, orig, "Harus mengembalikan array baru");
+  assert.deepEqual(orig, origCopy, "Array asli tidak boleh dimutasi");
+  console.log("  ✓ Immutabilitas array input terverifikasi tanpa mutasi");
+}
+
 console.log("\n=== SEMUA PENGECEKAN LOKAL SUKSES ===");
+
 

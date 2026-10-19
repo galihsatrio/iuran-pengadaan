@@ -153,6 +153,8 @@ create table if not exists public.payment_settings (
     id text primary key default 'default',
     qris_image_url text,
     qris_name text not null default 'QRIS Pembayaran Iuran Warga',
+    nama_bendahara text,
+    no_wa_bendahara text,
     bank_name text,
     account_number text,
     account_name text,
@@ -184,4 +186,67 @@ with check (
         where pengurus_allowlist.user_id = auth.uid()
     )
 );
+
+-- 8. Tabel Master Bendahara (Treasurers)
+create table if not exists public.treasurers (
+    id uuid primary key default gen_random_uuid(),
+    name text not null check (char_length(trim(name)) > 0 and char_length(name) <= 100),
+    wa_number text not null check (char_length(trim(wa_number)) > 0 and char_length(wa_number) <= 20),
+    qris_image_url text,
+    is_active boolean not null default true,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    created_by uuid references auth.users(id),
+    updated_by uuid references auth.users(id)
+);
+
+create index if not exists idx_treasurers_is_active on public.treasurers(is_active);
+
+alter table public.treasurers enable row level security;
+
+create policy "Public can read active treasurers"
+on public.treasurers
+for select
+to anon, authenticated
+using (is_active = true);
+
+create policy "Only allowlisted pengurus can select all treasurers"
+on public.treasurers
+for select
+to authenticated
+using (
+    exists (
+        select 1 from public.pengurus_allowlist
+        where pengurus_allowlist.user_id = auth.uid()
+    )
+);
+
+create policy "Only allowlisted pengurus can insert treasurers"
+on public.treasurers
+for insert
+to authenticated
+with check (
+    exists (
+        select 1 from public.pengurus_allowlist
+        where pengurus_allowlist.user_id = auth.uid()
+    )
+);
+
+create policy "Only allowlisted pengurus can update treasurers"
+on public.treasurers
+for update
+to authenticated
+using (
+    exists (
+        select 1 from public.pengurus_allowlist
+        where pengurus_allowlist.user_id = auth.uid()
+    )
+)
+with check (
+    exists (
+        select 1 from public.pengurus_allowlist
+        where pengurus_allowlist.user_id = auth.uid()
+    )
+);
+
 

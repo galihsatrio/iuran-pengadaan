@@ -3,10 +3,15 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { formatIDR, formatDateID } from "@/lib/format";
-import { getPaymentSettings } from "@/lib/payment-settings";
-import QrisPreviewToggle from "@/components/qris-preview";
+import { formatIDR, formatWhatsAppUrl } from "@/lib/format";
+import { getActiveTreasurers } from "@/lib/treasurers";
 import type { IuranRecord } from "@/lib/types";
+import {
+  calculateResidentTotals,
+  calculateResidentDuesStatus,
+  getResidentKey,
+  sortRecordsByCumulativePaidDesc,
+} from "@/lib/dues";
 
 
 // ponytail: Direct server component query wrapped in Suspense for instant static shell streaming. Upgrade to pagination if records exceed 200 items.
@@ -84,14 +89,14 @@ async function IuranContent() {
             </p>
           </div>
 
-          <div>
+          <div className="w-full sm:w-auto">
             <a
               href="/api/export-xlsx"
               download="rekap-iuran-portal.xlsx"
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs focus-visible:outline-2 focus-visible:outline-emerald-600"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] text-xs sm:text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs focus-visible:outline-2 focus-visible:outline-emerald-600"
             >
               <svg
-                className="w-4 h-4"
+                className="w-4 h-4 shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -129,72 +134,151 @@ async function IuranContent() {
               mencatat kontribusi warga di sistem.
             </p>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-700">
-              <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
-                <tr>
-                  <th scope="col" className="py-3 px-4 w-12 text-center">
-                    No
-                  </th>
-                  <th scope="col" className="py-3 px-4">
-                    Nama Blok
-                  </th>
-                  <th scope="col" className="py-3 px-4">
-                    Nomor Blok
-                  </th>
-                  <th scope="col" className="py-3 px-4">
-                    Nama Kepala Keluarga
-                  </th>
-                  <th scope="col" className="py-3 px-4 text-right">
-                    Jumlah Iuran
-                  </th>
-                  <th scope="col" className="py-3 px-4 text-right">
-                    Waktu Pencatatan
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {records.map((item, index) => (
-                  <tr
-                    key={item.id}
-                    className="hover:bg-slate-50/70 transition-colors"
-                  >
-                    <td className="py-3 px-4 text-center text-slate-400 text-xs font-mono">
-                      {index + 1}
-                    </td>
-                    <td className="py-3 px-4 font-medium text-slate-900">
-                      {item.nama_blok}
-                    </td>
-                    <td className="py-3 px-4 text-slate-600">
-                      {item.nomor_blok}
-                    </td>
-                    <td className="py-3 px-4 text-slate-800 font-medium">
-                      {item.nama_kepala_keluarga || "-"}
-                    </td>
-                    <td className="py-3 px-4 text-right font-semibold text-emerald-700">
-                      {formatIDR(item.amount)}
-                    </td>
-                    <td className="py-3 px-4 text-right text-xs text-slate-500">
-                      {formatDateID(item.created_at)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
-                <tr>
-                  <td colSpan={4} className="py-3 px-4 text-right text-slate-700">
-                    Total Terkumpul:
-                  </td>
-                  <td className="py-3 px-4 text-right text-emerald-700">
-                    {formatIDR(totalAmount)}
-                  </td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
+        ) : (() => {
+          const residentTotals = calculateResidentTotals(records);
+
+          return (
+            <div className="p-4 sm:p-6 space-y-6">
+              {Object.entries(
+                records.reduce<Record<string, IuranRecord[]>>((acc, item) => {
+                  const key = item.nama_blok?.trim() || "Lainnya";
+                  if (!acc[key]) acc[key] = [];
+                  acc[key].push(item);
+                  return acc;
+                }, {})
+              )
+                .sort(([a], [b]) => a.localeCompare(b, "id", { numeric: true, sensitivity: "base" }))
+                .map(([namaBlok, blockRecords]) => {
+                  const blockTotal = blockRecords.reduce(
+                    (sum, r) => sum + Number(r.amount || 0),
+                    0
+                  );
+
+                  return (
+                    <div
+                      key={namaBlok}
+                      className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-2xs"
+                    >
+                      <div className="bg-slate-50/80 px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                          <h3 className="text-sm font-bold text-slate-900">
+                            Blok: {namaBlok}
+                          </h3>
+                          <span className="text-xs text-slate-500">
+                            ({blockRecords.length} catatan)
+                          </span>
+                        </div>
+                        <div className="text-xs font-semibold text-slate-700">
+                          Subtotal:{" "}
+                          <span className="text-emerald-700 font-bold">
+                            {formatIDR(blockTotal)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-slate-700 min-w-[620px]">
+                          <thead className="bg-slate-50/50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
+                            <tr>
+                              <th scope="col" className="py-2.5 px-4 w-12 text-center">
+                                No
+                              </th>
+                              <th scope="col" className="py-2.5 px-4">
+                                Nomor Rumah
+                              </th>
+                              <th scope="col" className="py-2.5 px-4">
+                                Nama Kepala Keluarga
+                              </th>
+                              <th scope="col" className="py-2.5 px-4 text-right">
+                                Jumlah Iuran
+                              </th>
+                              <th scope="col" className="py-2.5 px-4 text-center">
+                                Tahap
+                              </th>
+                              <th scope="col" className="py-2.5 px-4 text-right">
+                                Target
+                              </th>
+                              <th scope="col" className="py-2.5 px-4 text-right">
+                                Sisa Tagihan
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {sortRecordsByCumulativePaidDesc(blockRecords, residentTotals).map((item, index) => {
+                              const rKey = getResidentKey(item);
+                              const cumulative = residentTotals.get(rKey) || Number(item.amount || 0);
+                              const duesStatus = calculateResidentDuesStatus(cumulative);
+
+                              return (
+                                <tr
+                                  key={item.id}
+                                  className="hover:bg-slate-50/70 transition-colors"
+                                >
+                                  <td className="py-2.5 px-4 text-center text-slate-400 text-xs font-mono">
+                                    {index + 1}
+                                  </td>
+                                  <td className="py-2.5 px-4 text-slate-600 font-medium">
+                                    {item.nomor_blok}
+                                  </td>
+                                  <td className="py-2.5 px-4 text-slate-800 font-medium">
+                                    {item.nama_kepala_keluarga || "-"}
+                                  </td>
+                                  <td className="py-2.5 px-4 text-right font-semibold text-emerald-700">
+                                    {formatIDR(item.amount)}
+                                  </td>
+                                  <td className="py-2.5 px-4 text-center whitespace-nowrap">
+                                    <span
+                                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                                        duesStatus.stage === 3
+                                          ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                          : duesStatus.stage === 2
+                                          ? "bg-blue-100 text-blue-800 border border-blue-200"
+                                          : duesStatus.stage === 1
+                                          ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                          : "bg-slate-100 text-slate-600 border border-slate-200"
+                                      }`}
+                                    >
+                                      {duesStatus.stageLabel}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 px-4 text-right text-xs text-slate-600 font-medium">
+                                    {formatIDR(duesStatus.target)}
+                                  </td>
+                                  <td className="py-2.5 px-4 text-right font-medium text-xs whitespace-nowrap">
+                                    {duesStatus.outstandingBalance > 0 ? (
+                                      <span className="text-amber-700 font-semibold">
+                                        {formatIDR(duesStatus.outstandingBalance)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-emerald-700 font-semibold">
+                                        Lunas (Rp0)
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                          <tfoot className="bg-slate-50/70 font-semibold text-xs border-t border-slate-200 text-slate-700">
+                            <tr>
+                              <td colSpan={3} className="py-2.5 px-4 text-right">
+                                Subtotal Blok {namaBlok}:
+                              </td>
+                              <td className="py-2.5 px-4 text-right text-emerald-700 font-bold">
+                                {formatIDR(blockTotal)}
+                              </td>
+                              <td colSpan={3}></td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          );
+        })()}
       </section>
     </>
   );
@@ -257,36 +341,217 @@ async function PaymentInfoSection() {
   await connection();
   const configured = isSupabaseConfigured();
   const supabase = configured ? await getServerSupabase() : null;
-  const paymentSettings = await getPaymentSettings(supabase);
+  const activeTreasurers = await getActiveTreasurers(supabase);
 
   return (
     <section
       aria-labelledby="payment-info-heading"
       className="mb-8 bg-white rounded-xl border border-slate-200 p-5 sm:p-6 shadow-xs"
     >
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div className="flex-1">
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700">
-            Informasi Pembayaran
-          </span>
-          <h2
-            id="payment-info-heading"
-            className="mt-1.5 text-base sm:text-lg font-bold text-slate-900"
-          >
-            Metode Penyaluran Iuran Warga
-          </h2>
-          <p className="mt-1 text-xs sm:text-sm text-slate-600">
-            Warga dapat menyalurkan iuran pengadaan portal secara tunai ke pengurus atau melalui transfer bank / kode QRIS resmi.
-          </p>
-        </div>
+      <div>
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700">
+          Informasi Pembayaran
+        </span>
+        <h2
+          id="payment-info-heading"
+          className="mt-1.5 text-base sm:text-lg font-bold text-slate-900"
+        >
+          Metode Penyaluran Iuran Warga
+        </h2>
+        <p className="mt-1 text-xs sm:text-sm text-slate-600">
+          Warga dapat menyalurkan iuran pengadaan portal secara tunai ke pengurus atau melalui transfer bank / kode QRIS resmi masing-masing bendahara.
+        </p>
 
-        {paymentSettings.qris_image_url && (
-          <div className="w-full sm:w-auto shrink-0 self-start sm:self-center">
-            <QrisPreviewToggle
-              imageUrl={paymentSettings.qris_image_url}
-              name={paymentSettings.qris_name}
-            />
-          </div>
+        {/* Daftar Bendahara Aktif - Collapse / Accordion List */}
+        {activeTreasurers.length > 0 && (
+          <details className="group/outer mt-4 pt-4 border-t border-slate-100">
+            <summary className="w-full sm:w-auto inline-flex items-center justify-between sm:justify-center gap-2.5 px-5 py-3 min-h-[48px] text-sm sm:text-base font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden focus-visible:outline-2 focus-visible:outline-emerald-600">
+              <span className="flex items-center gap-2">
+                <svg
+                  className="w-5 h-5 shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
+                  />
+                </svg>
+                <span>Bayar Iuran</span>
+              </span>
+              <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-100">
+                <span className="hidden sm:inline group-open/outer:hidden">Lihat Kontak Bendahara</span>
+                <span className="hidden group-open/outer:sm:inline">Tutup Kontak</span>
+                <svg
+                  className="w-4 h-4 transition-transform duration-200 group-open/outer:rotate-180"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </span>
+            </summary>
+
+            <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+              <div className="rounded-lg bg-emerald-50/70 border border-emerald-200 p-3.5 sm:p-4 text-emerald-950">
+                <p className="text-sm sm:text-base font-semibold leading-relaxed">
+                  Bayar melalui bendahara berikut. Pilih nama untuk melihat QRIS dan mengirim bukti pembayaran.
+                </p>
+              </div>
+
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Kontak Bendahara &amp; QRIS Pembayaran ({activeTreasurers.length} Aktif)
+              </h3>
+
+              <div className="space-y-2.5">
+                {activeTreasurers.map((treasurer) => {
+                  const waUrl = formatWhatsAppUrl(treasurer.wa_number);
+
+                  return (
+                    <details
+                      key={treasurer.id}
+                      className="group rounded-xl border border-slate-200 bg-white shadow-2xs overflow-hidden transition-colors open:border-emerald-300"
+                    >
+                      <summary className="flex items-center justify-between gap-3 p-3.5 sm:p-4 cursor-pointer select-none hover:bg-slate-50/80 transition-colors list-none [&::-webkit-details-marker]:hidden focus-visible:outline-2 focus-visible:outline-emerald-600">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-slate-900 truncate">
+                              {treasurer.name}
+                            </span>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 shrink-0">
+                              Bendahara
+                            </span>
+                          </div>
+                          {treasurer.wa_number && (
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              WA: <span className="font-medium text-slate-700">{treasurer.wa_number}</span>
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 text-xs text-slate-400 group-open:text-emerald-600 shrink-0">
+                          <span className="text-[11px] font-medium hidden sm:inline group-open:hidden">
+                            Buka QRIS &amp; Kontak
+                          </span>
+                          <span className="text-[11px] font-medium hidden group-open:sm:inline">
+                            Tutup
+                          </span>
+                          <svg
+                            className="w-4 h-4 transition-transform duration-200 group-open:rotate-180"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 9l-7 7-7-7"
+                            />
+                          </svg>
+                        </div>
+                      </summary>
+
+                      <div className="px-3.5 pb-4 pt-1 sm:px-4 border-t border-slate-100 flex flex-col items-center text-center">
+                        {treasurer.qris_image_url ? (
+                          <>
+                            <div className="mt-3 bg-white p-3 rounded-xl border border-slate-200 shadow-xs inline-block">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={treasurer.qris_image_url}
+                                alt={`Kode QRIS Pembayaran ${treasurer.name}`}
+                                className="w-56 sm:w-64 max-h-80 object-contain mx-auto rounded-lg"
+                                loading="lazy"
+                              />
+                            </div>
+
+                            <p className="mt-2.5 text-xs sm:text-sm font-semibold text-slate-800">
+                              QRIS {treasurer.name}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500 max-w-sm">
+                              Pindai kode QRIS di atas melalui mobile banking atau aplikasi dompet digital.
+                            </p>
+
+                            <div className="mt-2.5">
+                              <a
+                                href={treasurer.qris_image_url}
+                                download={`qris-${treasurer.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}.png`}
+                                className="inline-flex items-center gap-1.5 py-1.5 px-3 min-h-[36px] text-xs text-emerald-700 hover:text-emerald-800 font-medium hover:underline rounded-lg"
+                              >
+                                <svg
+                                  className="w-3.5 h-3.5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                  aria-hidden="true"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                                  />
+                                </svg>
+                                <span>Unduh Gambar QRIS</span>
+                              </a>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="mt-3 p-4 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-500 w-full max-w-sm">
+                            Kode QRIS belum diunggah untuk bendahara ini. Silakan transfer melalui rekening bank atau hubungi nomor WhatsApp.
+                          </div>
+                        )}
+
+                        {/* Tombol Kirim Bukti Pembayaran */}
+                        <div className="mt-4 pt-3 border-t border-slate-100 w-full flex flex-col sm:flex-row items-center justify-center gap-2">
+                          {waUrl ? (
+                            <a
+                              href={waUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] text-xs sm:text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs focus-visible:outline-2 focus-visible:outline-emerald-600"
+                            >
+                              <svg
+                                className="w-4 h-4 shrink-0"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                                />
+                              </svg>
+                              <span>Kirim Bukti Pembayaran</span>
+                            </a>
+                          ) : (
+                            <span className="text-xs text-slate-400">
+                              Nomor WhatsApp belum tersedia untuk konfirmasi bukti pembayaran.
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+            </div>
+          </details>
         )}
       </div>
     </section>
@@ -300,23 +565,23 @@ export default function HomePage() {
     <div className="min-h-screen bg-slate-50 text-slate-800">
       {/* Top Navigation */}
       <header className="border-b border-slate-200 bg-white sticky top-0 z-10 shadow-xs">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold text-lg shadow-sm shrink-0">
               IP
             </div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-900 leading-tight">
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight truncate">
                 Iuran Portal Lingkungan
               </h1>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-500 truncate">
                 Transparansi Dana Swadaya Warga
               </p>
             </div>
           </div>
           <Link
             href="/pengurus"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-600"
+            className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-[44px] text-xs sm:text-sm font-medium rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-600 shrink-0"
           >
             <span>Area Pengurus</span>
             <span aria-hidden="true">&rarr;</span>

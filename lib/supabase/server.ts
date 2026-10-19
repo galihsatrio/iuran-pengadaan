@@ -1,11 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 import { isSupabaseConfigured } from "./config";
 
 // ponytail: Server client using cookies to preserve auth context. Strictly uses anon key, relying on DB RLS for permissions rather than bypass keys.
 export async function getServerSupabase() {
   if (!isSupabaseConfigured()) return null;
 
+  await connection();
   const cookieStore = await cookies();
 
   return createServerClient(

@@ -163,7 +163,7 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
           onClick={handleToggle}
           aria-haspopup="true"
           aria-expanded={isOpen}
-          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 transition-colors shadow-xs"
+          className="inline-flex items-center justify-center gap-1 px-2.5 sm:px-3 py-1.5 min-h-[36px] text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 transition-colors shadow-xs"
         >
           <span>Opsi</span>
           <svg
@@ -198,7 +198,7 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
                 setIsOpen(false);
                 setIsEditing(true);
               }}
-              className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 cursor-pointer"
+              className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 cursor-pointer"
             >
               <svg
                 className="w-3.5 h-3.5 text-slate-500"
@@ -223,7 +223,7 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
                 setDeleteError(null);
                 setIsDeleting(true);
               }}
-              className="w-full text-left px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer"
+              className="w-full text-left px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer"
             >
               <svg
                 className="w-3.5 h-3.5 text-rose-500"
@@ -266,7 +266,7 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
             <button
               type="button"
               onClick={() => setIsEditing(false)}
-              className="text-slate-400 hover:text-slate-600 text-sm font-semibold p-1"
+              className="text-slate-400 hover:text-slate-600 text-sm font-semibold p-2 -mr-1.5 min-h-[36px] min-w-[36px] inline-flex items-center justify-center cursor-pointer"
               aria-label="Tutup"
             >
               ✕
@@ -303,7 +303,7 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
                   maxLength={50}
                   defaultValue={record.nama_blok}
                   disabled={isPendingEdit}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
                 />
                 {editState.errors?.nama_blok && (
                   <p className="mt-1 text-xs text-rose-600">
@@ -327,7 +327,7 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
                   maxLength={20}
                   defaultValue={record.nomor_blok}
                   disabled={isPendingEdit}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
                 />
                 {editState.errors?.nomor_blok && (
                   <p className="mt-1 text-xs text-rose-600">
@@ -352,7 +352,7 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
                 maxLength={100}
                 defaultValue={record.nama_kepala_keluarga}
                 disabled={isPendingEdit}
-                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
               />
               {editState.errors?.nama_kepala_keluarga && (
                 <p className="mt-1 text-xs text-rose-600">
@@ -377,7 +377,7 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
                 required
                 defaultValue={record.amount}
                 disabled={isPendingEdit}
-                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
               />
               {editState.errors?.amount && (
                 <p className="mt-1 text-xs text-rose-600">
@@ -386,19 +386,19 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
               )}
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+            <div className="pt-3 border-t border-slate-100 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setIsEditing(false)}
                 disabled={isPendingEdit}
-                className="px-3.5 py-1.5 text-xs font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                className="w-full sm:w-auto py-2.5 px-4 min-h-[44px] justify-center inline-flex items-center text-xs font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
               >
                 Batal
               </button>
               <button
                 type="submit"
                 disabled={isPendingEdit}
-                className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+                className="w-full sm:w-auto py-2.5 px-4 min-h-[44px] justify-center inline-flex items-center text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
               >
                 {isPendingEdit ? "Menyimpan..." : "Simpan Perubahan"}
               </button>
@@ -445,12 +445,12 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
             </div>
           )}
 
-          <div className="mt-5 flex items-center justify-end gap-2">
+          <div className="mt-5 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
             <button
               type="button"
               onClick={() => setIsDeleting(false)}
               disabled={isPendingDelete}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+              className="w-full sm:w-auto py-2.5 px-4 min-h-[44px] justify-center inline-flex items-center text-xs font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
             >
               Batal
             </button>
@@ -458,7 +458,7 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
               type="button"
               onClick={handleDelete}
               disabled={isPendingDelete}
-              className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+              className="w-full sm:w-auto py-2.5 px-4 min-h-[44px] justify-center inline-flex items-center text-xs font-semibold rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
             >
               {isPendingDelete ? "Menghapus..." : "Ya, Hapus"}
             </button>

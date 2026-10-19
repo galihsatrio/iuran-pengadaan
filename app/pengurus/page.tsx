@@ -2,11 +2,15 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { formatIDR, formatDateID } from "@/lib/format";
-import { getPaymentSettings } from "@/lib/payment-settings";
+import { formatIDR } from "@/lib/format";
+import {
+  calculateResidentTotals,
+  calculateResidentDuesStatus,
+  getResidentKey,
+  sortRecordsByCumulativePaidDesc,
+} from "@/lib/dues";
 import ContributionForm from "./contribution-form";
 import IuranRowActions from "./row-actions";
-import QrisUploadSection from "./qris-upload-section";
 import { logoutAction } from "./actions";
 
 import type { IuranRecord } from "@/lib/types";
@@ -112,41 +116,39 @@ export default async function PengurusPage() {
     0
   );
 
-  const paymentSettings = await getPaymentSettings(supabase);
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
       {/* Pengurus Navbar */}
       <header className="border-b border-slate-200 bg-white sticky top-0 z-10 shadow-xs">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold text-sm shadow-xs">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold text-sm shadow-xs shrink-0">
               IP
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm sm:text-base font-bold text-slate-900 leading-none">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <h1 className="text-sm sm:text-base font-bold text-slate-900 leading-none truncate">
                   Portal Pengurus
                 </h1>
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                <span className="hidden xs:inline-flex sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 shrink-0">
                   Allowlisted
                 </span>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">{user.email}</p>
+              <p className="text-xs text-slate-500 mt-0.5 truncate max-w-[130px] sm:max-w-xs">{user.email}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link
               href="/"
-              className="text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 hover:underline"
+              className="text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 hover:underline min-h-[44px] inline-flex items-center px-1"
             >
               Tampilan Publik
             </Link>
-            <form action={logoutAction}>
+            <form action={logoutAction} className="inline-flex items-center">
               <button
                 type="submit"
-                className="px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors"
+                className="px-2.5 sm:px-3 py-1.5 min-h-[36px] sm:min-h-0 text-xs sm:text-sm font-medium rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors inline-flex items-center cursor-pointer"
               >
                 Keluar
               </button>
@@ -155,13 +157,26 @@ export default async function PengurusPage() {
         </div>
       </header>
 
+      {/* Navigation Subheader / Breadcrumb Tabs */}
+      <div className="border-b border-slate-200 bg-white">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex gap-4 sm:gap-6 text-xs sm:text-sm font-medium overflow-x-auto no-scrollbar whitespace-nowrap">
+          <Link
+            href="/pengurus"
+            className="py-3 border-b-2 border-emerald-600 text-emerald-700 font-semibold shrink-0 min-h-[44px] flex items-center"
+          >
+            Data Iuran Warga
+          </Link>
+          <Link
+            href="/pengurus/master-bendahara"
+            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px] flex items-center"
+          >
+            Master Bendahara &amp; QRIS
+          </Link>
+        </div>
+      </div>
+
       {/* Main Container */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-        {/* QRIS & Payment Settings Section */}
-        <section aria-label="Pengaturan QRIS Pembayaran">
-          <QrisUploadSection initialSettings={paymentSettings} />
-        </section>
-
         {/* Form Section */}
         <section aria-labelledby="form-heading">
           <ContributionForm />
@@ -185,7 +200,7 @@ export default async function PengurusPage() {
             <a
               href="/api/export-xlsx"
               download="rekap-iuran-portal.xlsx"
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors min-h-[44px] sm:min-h-0"
             >
               <span>Unduh Excel (.xlsx)</span>
             </a>
@@ -196,67 +211,157 @@ export default async function PengurusPage() {
               Belum ada data iuran yang dicatat. Gunakan form di atas untuk
               mencatat iuran warga.
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-slate-700">
-                <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
-                  <tr>
-                    <th scope="col" className="py-2.5 px-4 w-12 text-center">
-                      No
-                    </th>
-                    <th scope="col" className="py-2.5 px-4">
-                      Nama Blok
-                    </th>
-                    <th scope="col" className="py-2.5 px-4">
-                      Nomor Blok
-                    </th>
-                    <th scope="col" className="py-2.5 px-4">
-                      Nama Kepala Keluarga
-                    </th>
-                    <th scope="col" className="py-2.5 px-4 text-right">
-                      Jumlah Iuran
-                    </th>
-                    <th scope="col" className="py-2.5 px-4 text-right">
-                      Waktu Dicatat
-                    </th>
-                    <th scope="col" className="py-2.5 px-4 text-center w-20">
-                      Opsi
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {records.map((item, index) => (
-                    <tr
-                      key={item.id}
-                      className="hover:bg-slate-50/70 transition-colors"
-                    >
-                      <td className="py-2.5 px-4 text-center text-slate-400 text-xs font-mono">
-                        {index + 1}
-                      </td>
-                      <td className="py-2.5 px-4 font-medium text-slate-900">
-                        {item.nama_blok}
-                      </td>
-                      <td className="py-2.5 px-4 text-slate-600">
-                        {item.nomor_blok}
-                      </td>
-                      <td className="py-2.5 px-4 text-slate-800 font-medium">
-                        {item.nama_kepala_keluarga || "-"}
-                      </td>
-                      <td className="py-2.5 px-4 text-right font-semibold text-emerald-700">
-                        {formatIDR(item.amount)}
-                      </td>
-                      <td className="py-2.5 px-4 text-right text-xs text-slate-500">
-                        {formatDateID(item.created_at)}
-                      </td>
-                      <td className="py-2.5 px-4 text-center">
-                        <IuranRowActions record={item} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          ) : (() => {
+            const residentTotals = calculateResidentTotals(records);
+
+            return (
+              <div className="p-4 sm:p-6 space-y-6">
+                {Object.entries(
+                  records.reduce<Record<string, IuranRecord[]>>((acc, item) => {
+                    const key = item.nama_blok?.trim() || "Lainnya";
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(item);
+                    return acc;
+                  }, {})
+                )
+                  .sort(([a], [b]) => a.localeCompare(b, "id", { numeric: true, sensitivity: "base" }))
+                  .map(([namaBlok, blockRecords]) => {
+                    const blockTotal = blockRecords.reduce(
+                      (sum, r) => sum + Number(r.amount || 0),
+                      0
+                    );
+
+                    return (
+                      <div
+                        key={namaBlok}
+                        className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-2xs"
+                      >
+                        <div className="bg-slate-50/80 px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                            <h3 className="text-sm font-bold text-slate-900">
+                              Blok: {namaBlok}
+                            </h3>
+                            <span className="text-xs text-slate-500">
+                              ({blockRecords.length} catatan)
+                            </span>
+                          </div>
+                          <div className="text-xs font-semibold text-slate-700">
+                            Subtotal:{" "}
+                            <span className="text-emerald-700 font-bold">
+                              {formatIDR(blockTotal)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-sm text-slate-700 min-w-[680px]">
+                            <thead className="bg-slate-50/50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
+                              <tr>
+                                <th scope="col" className="py-2.5 px-4 w-12 text-center">
+                                  No
+                                </th>
+                                <th scope="col" className="py-2.5 px-4">
+                                  Nomor Rumah
+                                </th>
+                                <th scope="col" className="py-2.5 px-4">
+                                  Nama Kepala Keluarga
+                                </th>
+                                <th scope="col" className="py-2.5 px-4 text-right">
+                                  Jumlah Iuran
+                                </th>
+                                <th scope="col" className="py-2.5 px-4 text-center">
+                                  Tahap
+                                </th>
+                                <th scope="col" className="py-2.5 px-4 text-right">
+                                  Target
+                                </th>
+                                <th scope="col" className="py-2.5 px-4 text-right">
+                                  Sisa Tagihan
+                                </th>
+                                <th scope="col" className="py-2.5 px-4 text-center w-20">
+                                  Opsi
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {sortRecordsByCumulativePaidDesc(blockRecords, residentTotals).map((item, index) => {
+                                const rKey = getResidentKey(item);
+                                const cumulative = residentTotals.get(rKey) || Number(item.amount || 0);
+                                const duesStatus = calculateResidentDuesStatus(cumulative);
+
+                                return (
+                                  <tr
+                                    key={item.id}
+                                    className="hover:bg-slate-50/70 transition-colors"
+                                  >
+                                    <td className="py-2.5 px-4 text-center text-slate-400 text-xs font-mono">
+                                      {index + 1}
+                                    </td>
+                                    <td className="py-2.5 px-4 text-slate-600 font-medium">
+                                      {item.nomor_blok}
+                                    </td>
+                                    <td className="py-2.5 px-4 text-slate-800 font-medium">
+                                      {item.nama_kepala_keluarga || "-"}
+                                    </td>
+                                    <td className="py-2.5 px-4 text-right font-semibold text-emerald-700">
+                                      {formatIDR(item.amount)}
+                                    </td>
+                                    <td className="py-2.5 px-4 text-center whitespace-nowrap">
+                                      <span
+                                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                                          duesStatus.stage === 3
+                                            ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                            : duesStatus.stage === 2
+                                            ? "bg-blue-100 text-blue-800 border border-blue-200"
+                                            : duesStatus.stage === 1
+                                            ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                            : "bg-slate-100 text-slate-600 border border-slate-200"
+                                        }`}
+                                      >
+                                        {duesStatus.stageLabel}
+                                      </span>
+                                    </td>
+                                    <td className="py-2.5 px-4 text-right text-xs text-slate-600 font-medium">
+                                      {formatIDR(duesStatus.target)}
+                                    </td>
+                                    <td className="py-2.5 px-4 text-right font-medium text-xs whitespace-nowrap">
+                                      {duesStatus.outstandingBalance > 0 ? (
+                                        <span className="text-amber-700 font-semibold">
+                                          {formatIDR(duesStatus.outstandingBalance)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-emerald-700 font-semibold">
+                                          Lunas (Rp0)
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="py-2.5 px-4 text-center">
+                                      <IuranRowActions record={item} />
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot className="bg-slate-50/70 font-semibold text-xs border-t border-slate-200 text-slate-700">
+                              <tr>
+                                <td colSpan={3} className="py-2.5 px-4 text-right">
+                                  Subtotal Blok {namaBlok}:
+                                </td>
+                                <td className="py-2.5 px-4 text-right text-emerald-700 font-bold">
+                                  {formatIDR(blockTotal)}
+                                </td>
+                                <td colSpan={4}></td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            );
+          })()}
         </section>
       </main>
     </div>

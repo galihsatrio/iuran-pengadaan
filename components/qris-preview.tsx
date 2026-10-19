@@ -26,7 +26,7 @@ export default function QrisPreviewToggle({
           onClick={() => setIsOpen((prev) => !prev)}
           aria-expanded={isOpen}
           aria-controls={panelId}
-          className="inline-flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs focus-visible:outline-2 focus-visible:outline-emerald-600 cursor-pointer"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-3.5 py-2.5 min-h-[44px] text-xs sm:text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs focus-visible:outline-2 focus-visible:outline-emerald-600 cursor-pointer"
         >
           <svg
             className="w-4 h-4"
@@ -89,7 +89,7 @@ export default function QrisPreviewToggle({
             <a
               href={imageUrl}
               download="qris-iuran-warga.png"
-              className="inline-flex items-center gap-1.5 text-xs text-emerald-700 hover:text-emerald-800 font-medium hover:underline"
+              className="inline-flex items-center gap-1.5 py-2 px-3 min-h-[44px] text-xs text-emerald-700 hover:text-emerald-800 font-medium hover:underline rounded-lg"
             >
               <svg
                 className="w-3.5 h-3.5"
