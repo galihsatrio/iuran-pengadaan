@@ -79,7 +79,7 @@ async function IuranContent() {
 
       {/* Table & Actions */}
       <section className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="p-4 sm:p-5 border-b border-slate-200">
           <div>
             <h2 className="text-base sm:text-lg font-bold text-slate-900">
               Daftar Riwayat Iuran Warga
@@ -87,31 +87,6 @@ async function IuranContent() {
             <p className="text-xs text-slate-500">
               Catatan transparan kontribusi swadaya warga
             </p>
-          </div>
-
-          <div className="w-full sm:w-auto">
-            <a
-              href="/api/export-xlsx"
-              download="rekap-iuran-portal.xlsx"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] text-xs sm:text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs focus-visible:outline-2 focus-visible:outline-emerald-600"
-            >
-              <svg
-                className="w-4 h-4 shrink-0"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              <span>Unduh Rekap Excel (.xlsx)</span>
-            </a>
           </div>
         </div>
 
@@ -346,185 +321,150 @@ async function PaymentInfoSection() {
   return (
     <section
       aria-labelledby="payment-info-heading"
-      className="mb-8 bg-white rounded-xl border border-slate-200 p-5 sm:p-6 shadow-xs"
+      className="mb-8 rounded-xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xs"
     >
-      <div>
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700">
-          Informasi Pembayaran
-        </span>
-        <h2
-          id="payment-info-heading"
-          className="mt-1.5 text-base sm:text-lg font-bold text-slate-900"
-        >
-          Metode Penyaluran Iuran Warga
-        </h2>
-        <p className="mt-1 text-xs sm:text-sm text-slate-600">
-          Warga dapat menyalurkan iuran pengadaan portal secara tunai ke pengurus atau melalui transfer bank / kode QRIS resmi masing-masing bendahara.
-        </p>
-
-        {/* Daftar Bendahara Aktif - Collapse / Accordion List */}
-        {activeTreasurers.length > 0 && (
-          <details className="group/outer mt-4 pt-4 border-t border-slate-100">
-            <summary className="w-full sm:w-auto inline-flex items-center justify-between sm:justify-center gap-2.5 px-5 py-3 min-h-[48px] text-sm sm:text-base font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden focus-visible:outline-2 focus-visible:outline-emerald-600">
-              <span className="flex items-center gap-2">
-                <svg
-                  className="w-5 h-5 shrink-0"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
+      {activeTreasurers.length > 0 && (
+        <details className="group/outer">
+          <summary className="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden focus-visible:outline-none">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200/60">
+                  Informasi Pembayaran
+                </span>
+                <h2
+                  id="payment-info-heading"
+                  className="mt-1.5 text-base sm:text-lg font-bold text-slate-900"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
-                  />
-                </svg>
-                <span>Bayar Iuran</span>
-              </span>
-              <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-100">
-                <span className="hidden sm:inline group-open/outer:hidden">Lihat Kontak Bendahara</span>
-                <span className="hidden group-open/outer:sm:inline">Tutup Kontak</span>
-                <svg
-                  className="w-4 h-4 transition-transform duration-200 group-open/outer:rotate-180"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
-              </span>
-            </summary>
-
-            <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
-              <div className="rounded-lg bg-emerald-50/70 border border-emerald-200 p-3.5 sm:p-4 text-emerald-950">
-                <p className="text-sm sm:text-base font-semibold leading-relaxed">
-                  Bayar melalui bendahara berikut. Pilih nama untuk melihat QRIS dan mengirim bukti pembayaran.
+                  Metode Penyaluran Iuran Warga
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Penyaluran dapat dilakukan secara tunai ke pengurus atau transfer via QRIS bendahara.
                 </p>
               </div>
 
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Kontak Bendahara &amp; QRIS Pembayaran ({activeTreasurers.length} Aktif)
-              </h3>
+              <div className="w-full sm:w-auto inline-flex items-center justify-between gap-2.5 px-5 py-2.5 min-h-[44px] text-sm sm:text-base font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 transition-colors shadow-xs shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600">
+                <span className="flex items-center gap-2">
+                  <svg
+                    className="w-5 h-5 shrink-0 text-emerald-100"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
+                    />
+                  </svg>
+                  <span>Bayar Iuran</span>
+                </span>
+                <span className="text-xs font-medium text-emerald-100 flex items-center gap-1">
+                  <span className="group-open/outer:hidden">Pilih Bendahara</span>
+                  <span className="hidden group-open/outer:inline">Tutup</span>
+                  <svg
+                    className="w-4 h-4 transition-transform duration-200 group-open/outer:rotate-180"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </span>
+              </div>
+            </div>
+          </summary>
 
-              <div className="space-y-2.5">
-                {activeTreasurers.map((treasurer) => {
-                  const waUrl = formatWhatsAppUrl(treasurer.wa_number);
+          <div className="mt-5 pt-4 border-t border-slate-100 space-y-2.5">
+            <p className="text-xs sm:text-sm text-slate-500">
+              Bayar melalui bendahara berikut. Buka salah satu nama untuk melihat QRIS atau kirim bukti.
+            </p>
 
-                  return (
-                    <details
-                      key={treasurer.id}
-                      className="group rounded-xl border border-slate-200 bg-white shadow-2xs overflow-hidden transition-colors open:border-emerald-300"
-                    >
-                      <summary className="flex items-center justify-between gap-3 p-3.5 sm:p-4 cursor-pointer select-none hover:bg-slate-50/80 transition-colors list-none [&::-webkit-details-marker]:hidden focus-visible:outline-2 focus-visible:outline-emerald-600">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-sm text-slate-900 truncate">
-                              {treasurer.name}
-                            </span>
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 shrink-0">
-                              Bendahara
-                            </span>
-                          </div>
-                          {treasurer.wa_number && (
-                            <p className="mt-0.5 text-xs text-slate-500">
-                              WA: <span className="font-medium text-slate-700">{treasurer.wa_number}</span>
-                            </p>
-                          )}
-                        </div>
+            <div className="space-y-2">
+              {activeTreasurers.map((treasurer) => {
+                const waUrl = formatWhatsAppUrl(treasurer.wa_number);
 
-                        <div className="flex items-center gap-1.5 text-xs text-slate-400 group-open:text-emerald-600 shrink-0">
-                          <span className="text-[11px] font-medium hidden sm:inline group-open:hidden">
-                            Buka QRIS &amp; Kontak
+                return (
+                  <details
+                    key={treasurer.id}
+                    className="group rounded-lg border border-slate-200 bg-white shadow-2xs overflow-hidden open:border-emerald-500 open:ring-1 open:ring-emerald-500/30"
+                  >
+                    <summary className="flex items-center justify-between gap-3 p-3.5 sm:p-4 cursor-pointer select-none hover:bg-slate-50/70 transition-colors list-none [&::-webkit-details-marker]:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 min-h-[48px]">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm sm:text-base text-slate-900 truncate">
+                            {treasurer.name}
                           </span>
-                          <span className="text-[11px] font-medium hidden group-open:sm:inline">
-                            Tutup
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/50 shrink-0">
+                            Bendahara
                           </span>
-                          <svg
-                            className="w-4 h-4 transition-transform duration-200 group-open:rotate-180"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                            aria-hidden="true"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 9l-7 7-7-7"
-                            />
-                          </svg>
                         </div>
-                      </summary>
-
-                      <div className="px-3.5 pb-4 pt-1 sm:px-4 border-t border-slate-100 flex flex-col items-center text-center">
-                        {treasurer.qris_image_url ? (
-                          <>
-                            <div className="mt-3 bg-white p-3 rounded-xl border border-slate-200 shadow-xs inline-block">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={treasurer.qris_image_url}
-                                alt={`Kode QRIS Pembayaran ${treasurer.name}`}
-                                className="w-56 sm:w-64 max-h-80 object-contain mx-auto rounded-lg"
-                                loading="lazy"
-                              />
-                            </div>
-
-                            <p className="mt-2.5 text-xs sm:text-sm font-semibold text-slate-800">
-                              QRIS {treasurer.name}
-                            </p>
-                            <p className="mt-1 text-xs text-slate-500 max-w-sm">
-                              Pindai kode QRIS di atas melalui mobile banking atau aplikasi dompet digital.
-                            </p>
-
-                            <div className="mt-2.5">
-                              <a
-                                href={treasurer.qris_image_url}
-                                download={`qris-${treasurer.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}.png`}
-                                className="inline-flex items-center gap-1.5 py-1.5 px-3 min-h-[36px] text-xs text-emerald-700 hover:text-emerald-800 font-medium hover:underline rounded-lg"
-                              >
-                                <svg
-                                  className="w-3.5 h-3.5"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                  aria-hidden="true"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                                  />
-                                </svg>
-                                <span>Unduh Gambar QRIS</span>
-                              </a>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="mt-3 p-4 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-500 w-full max-w-sm">
-                            Kode QRIS belum diunggah untuk bendahara ini. Silakan transfer melalui rekening bank atau hubungi nomor WhatsApp.
-                          </div>
+                        {treasurer.wa_number && (
+                          <p className="mt-0.5 text-xs text-slate-500 font-mono">
+                            WA: <span className="font-medium text-slate-700">{treasurer.wa_number}</span>
+                          </p>
                         )}
+                      </div>
 
-                        {/* Tombol Kirim Bukti Pembayaran */}
-                        <div className="mt-4 pt-3 border-t border-slate-100 w-full flex flex-col sm:flex-row items-center justify-center gap-2">
-                          {waUrl ? (
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500 group-open:text-emerald-700 shrink-0">
+                        <span className="font-medium hidden sm:inline group-open:hidden">
+                          QRIS &amp; Kontak
+                        </span>
+                        <span className="font-medium hidden group-open:sm:inline">
+                          Tutup
+                        </span>
+                        <svg
+                          className="w-4 h-4 transition-transform duration-200 group-open:rotate-180"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 9l-7 7-7-7"
+                          />
+                        </svg>
+                      </div>
+                    </summary>
+
+                    <div className="px-4 pb-4 pt-1 sm:px-5 sm:pb-5 border-t border-slate-100 flex flex-col items-center text-center">
+                      {treasurer.qris_image_url ? (
+                        <>
+                          <div className="mt-2 bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200 shadow-2xs inline-block">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={treasurer.qris_image_url}
+                              alt={`Kode QRIS Pembayaran ${treasurer.name}`}
+                              className="w-56 sm:w-64 max-h-80 object-contain mx-auto rounded-lg"
+                              loading="lazy"
+                            />
+                          </div>
+
+                          <p className="mt-2 text-xs sm:text-sm font-semibold text-slate-800">
+                            QRIS {treasurer.name}
+                          </p>
+                          <p className="mt-0.5 text-xs text-slate-500 max-w-sm">
+                            Pindai kode QRIS menggunakan mobile banking atau e-wallet.
+                          </p>
+
+                          <div className="mt-2">
                             <a
-                              href={waUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] text-xs sm:text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs focus-visible:outline-2 focus-visible:outline-emerald-600"
+                              href={treasurer.qris_image_url}
+                              download={`qris-${treasurer.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}.png`}
+                              className="inline-flex items-center gap-1.5 py-1 px-2.5 min-h-[36px] text-xs text-emerald-700 hover:text-emerald-800 font-medium hover:underline rounded transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
                             >
                               <svg
-                                className="w-4 h-4 shrink-0"
+                                className="w-3.5 h-3.5 shrink-0"
                                 fill="none"
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
@@ -534,26 +474,77 @@ async function PaymentInfoSection() {
                                   strokeLinecap="round"
                                   strokeLinejoin="round"
                                   strokeWidth={2}
-                                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
                                 />
                               </svg>
-                              <span>Kirim Bukti Pembayaran</span>
+                              <span>Unduh Gambar QRIS</span>
                             </a>
-                          ) : (
-                            <span className="text-xs text-slate-400">
-                              Nomor WhatsApp belum tersedia untuk konfirmasi bukti pembayaran.
-                            </span>
-                          )}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="mt-2 p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-500 w-full max-w-sm">
+                          Kode QRIS belum diunggah untuk bendahara ini. Silakan hubungi nomor WhatsApp di bawah untuk konfirmasi.
                         </div>
+                      )}
+
+                      {/* Tombol Kirim Bukti Pembayaran */}
+                      <div className="mt-4 pt-3 border-t border-slate-100 w-full flex flex-col sm:flex-row items-center justify-center gap-2">
+                        {waUrl ? (
+                          <a
+                            href={waUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] text-xs sm:text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 transition-colors shadow-2xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
+                          >
+                            <svg
+                              className="w-4 h-4 shrink-0"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                              />
+                            </svg>
+                            <span>Kirim Bukti Pembayaran via WhatsApp</span>
+                          </a>
+                        ) : (
+                          <span className="text-xs text-slate-400">
+                            Nomor WhatsApp belum tersedia untuk konfirmasi bukti pembayaran.
+                          </span>
+                        )}
                       </div>
-                    </details>
-                  );
-                })}
-              </div>
+                    </div>
+                  </details>
+                );
+              })}
             </div>
-          </details>
-        )}
-      </div>
+          </div>
+        </details>
+      )}
+
+      {activeTreasurers.length === 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200/60">
+              Informasi Pembayaran
+            </span>
+            <h2
+              id="payment-info-heading"
+              className="mt-1.5 text-base sm:text-lg font-bold text-slate-900"
+            >
+              Metode Penyaluran Iuran Warga
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Penyaluran dapat dilakukan secara tunai ke pengurus atau transfer via QRIS bendahara.
+            </p>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
