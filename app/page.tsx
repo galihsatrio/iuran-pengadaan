@@ -65,75 +65,160 @@ async function IuranContent() {
         <h2 id="stats-heading" className="sr-only">
           Ringkasan Kas Iuran &amp; Pengeluaran
         </h2>
-        <div className={`grid grid-cols-1 sm:grid-cols-2 ${showExpenses ? "lg:grid-cols-4" : "lg:grid-cols-2"} gap-4`}>
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Total Dana Terkumpul
-            </span>
-            <p className="mt-2 text-xl sm:text-2xl lg:text-xl xl:text-2xl 2xl:text-3xl font-extrabold text-emerald-600 break-words tracking-tight">
-              {formatIDR(cashFlow.totalIncome)}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Dari {records.length} catatan iuran warga
-            </p>
+        <div
+          className={`grid grid-cols-1 sm:grid-cols-2 ${
+            showExpenses ? "lg:grid-cols-4" : "lg:grid-cols-2"
+          } gap-3 sm:gap-4`}
+        >
+          {/* Card 1: Total Dana Terkumpul */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs flex flex-col justify-between h-full min-w-0">
+            <div className="flex items-start justify-between gap-2.5 sm:gap-3">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 min-w-0 leading-snug">
+                Total Dana Terkumpul
+              </span>
+              <div
+                className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 ring-1 ring-emerald-200/60"
+                aria-hidden="true"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              </div>
+            </div>
+            <div className="mt-3 min-w-0">
+              <p className="text-lg sm:text-xl lg:text-lg xl:text-xl font-extrabold text-emerald-600 whitespace-nowrap tracking-tight">
+                {formatIDR(cashFlow.totalIncome)}
+              </p>
+              <p className="mt-1 text-xs text-slate-500 min-w-0 leading-relaxed">
+                Dari {records.length} catatan iuran warga
+              </p>
+            </div>
           </div>
 
           {showExpenses && (
             <>
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Total Pengeluaran
-                </span>
-                <p className="mt-2 text-xl sm:text-2xl lg:text-xl xl:text-2xl 2xl:text-3xl font-extrabold text-rose-600 break-words tracking-tight">
-                  {formatIDR(cashFlow.totalExpense)}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Dari {expenses.length} alokasi kas
-                </p>
+              {/* Card 2: Total Pengeluaran */}
+              <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs flex flex-col justify-between h-full min-w-0">
+                <div className="flex items-start justify-between gap-2.5 sm:gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 min-w-0 leading-snug">
+                    Total Pengeluaran
+                  </span>
+                  <div
+                    className="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 ring-1 ring-rose-200/60"
+                    aria-hidden="true"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="mt-3 min-w-0">
+                  <p className="text-lg sm:text-xl lg:text-lg xl:text-xl font-extrabold text-rose-600 whitespace-nowrap tracking-tight">
+                    {formatIDR(cashFlow.totalExpense)}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500 min-w-0 leading-relaxed">
+                    Dari {expenses.length} alokasi kas
+                  </p>
+                </div>
               </div>
 
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Saldo Kas Bersih
-                </span>
-                <p
-                  className={`mt-2 text-xl sm:text-2xl lg:text-xl xl:text-2xl 2xl:text-3xl font-extrabold break-words tracking-tight ${
-                    cashFlow.netBalance >= 0 ? "text-emerald-700" : "text-rose-700"
-                  }`}
-                >
-                  {formatIDR(cashFlow.netBalance)}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Pemasukan dikurangi pengeluaran
-                </p>
+              {/* Card 3: Saldo Kas Bersih */}
+              <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs flex flex-col justify-between h-full min-w-0">
+                <div className="flex items-start justify-between gap-2.5 sm:gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 min-w-0 leading-snug">
+                    Saldo Kas Bersih
+                  </span>
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ring-1 ${
+                      cashFlow.netBalance >= 0
+                        ? "bg-emerald-50 text-emerald-700 ring-emerald-200/60"
+                        : "bg-rose-50 text-rose-700 ring-rose-200/60"
+                    }`}
+                    aria-hidden="true"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"
+                      />
+                    </svg>
+                  </div>
+                </div>
+                <div className="mt-3 min-w-0">
+                  <p
+                    className={`text-lg sm:text-xl lg:text-lg xl:text-xl font-extrabold whitespace-nowrap tracking-tight ${
+                      cashFlow.netBalance >= 0 ? "text-emerald-700" : "text-rose-700"
+                    }`}
+                  >
+                    {formatIDR(cashFlow.netBalance)}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500 min-w-0 leading-relaxed">
+                    Pemasukan dikurangi pengeluaran
+                  </p>
+                </div>
               </div>
             </>
           )}
 
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Jumlah Partisipasi
-            </span>
-            <p className="mt-2 text-xl sm:text-2xl lg:text-xl xl:text-2xl 2xl:text-3xl font-extrabold text-slate-800 break-words tracking-tight">
-              {records.length} <span className="text-base font-medium text-slate-500">Warga</span>
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Pengadaan &amp; pemeliharaan portal
-            </p>
+          {/* Card 4: Jumlah Partisipasi */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs flex flex-col justify-between h-full min-w-0">
+            <div className="flex items-start justify-between gap-2.5 sm:gap-3">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 min-w-0 leading-snug">
+                Jumlah Partisipasi
+              </span>
+              <div
+                className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 ring-1 ring-slate-200/80"
+                aria-hidden="true"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                  />
+                </svg>
+              </div>
+            </div>
+            <div className="mt-3 min-w-0">
+              <p className="text-lg sm:text-xl lg:text-lg xl:text-xl font-extrabold text-slate-800 whitespace-nowrap tracking-tight">
+                {records.length} <span className="text-sm font-medium text-slate-500">Warga</span>
+              </p>
+              <p className="mt-1 text-xs text-slate-500 min-w-0 leading-relaxed">
+                Pengadaan &amp; pemeliharaan portal
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Table & Actions */}
-      <section className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-3.5 sm:p-5 border-b border-slate-200">
-          <div>
-            <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
-              Daftar Riwayat Iuran Warga
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Catatan transparan kontribusi swadaya warga
-            </p>
+      <section className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+        <div className="p-3.5 sm:p-5 border-b border-slate-200/90 bg-white">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 ring-1 ring-slate-200/80"
+              aria-hidden="true"
+            >
+              <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+                Daftar Riwayat Iuran Warga
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Catatan transparan kontribusi swadaya warga
+              </p>
+            </div>
           </div>
         </div>
 
