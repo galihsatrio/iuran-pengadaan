@@ -8,17 +8,13 @@ const initialState: ActionResult = {
   message: "",
 };
 
-// ponytail: Native <dialog> modal matches existing edit form pattern in row-actions.tsx.
+// ponytail: Native <dialog> modal matches existing edit form pattern in row-actions.tsx. Form key reset on close clears previous action state & validation errors.
 export default function ContributionForm() {
   const [isOpen, setIsOpen] = useState(false);
-  const [state, formAction, isPending] = useActionState(
-    createIuranRecord,
-    initialState
-  );
+  const [formKey, setFormKey] = useState(0);
 
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const formRef = useRef<HTMLFormElement>(null);
 
   // Focus restore & dialog visibility management
   useEffect(() => {
@@ -37,18 +33,10 @@ export default function ContributionForm() {
     }
   }, [isOpen]);
 
-  // Handle successful creation: reset form and close dialog after short feedback
-  useEffect(() => {
-    if (state.success && isOpen) {
-      if (formRef.current) {
-        formRef.current.reset();
-      }
-      const timer = setTimeout(() => {
-        setIsOpen(false);
-      }, 700);
-      return () => clearTimeout(timer);
-    }
-  }, [state.success, isOpen]);
+  const handleClose = () => {
+    setIsOpen(false);
+    setFormKey((k) => k + 1);
+  };
 
   return (
     <>
@@ -89,7 +77,7 @@ export default function ContributionForm() {
         ref={dialogRef}
         onCancel={(e) => {
           e.preventDefault();
-          setIsOpen(false);
+          handleClose();
         }}
         aria-labelledby="create-dialog-title"
         className="fixed inset-0 m-auto p-0 rounded-xl border border-slate-200 shadow-xl max-w-lg w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto bg-white text-slate-900 backdrop:bg-slate-900/40 backdrop:backdrop-blur-xs z-50"
@@ -109,7 +97,7 @@ export default function ContributionForm() {
             </div>
             <button
               type="button"
-              onClick={() => setIsOpen(false)}
+              onClick={handleClose}
               className="text-slate-400 hover:text-slate-600 text-sm font-semibold p-2 -mr-1.5 min-h-[36px] min-w-[36px] inline-flex items-center justify-center cursor-pointer"
               aria-label="Tutup"
             >
@@ -117,153 +105,180 @@ export default function ContributionForm() {
             </button>
           </div>
 
-          {state.message && (
-            <div
-              role="alert"
-              className={`mt-4 p-3 rounded-lg text-xs ${
-                state.success
-                  ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
-                  : "bg-rose-50 border border-rose-200 text-rose-800"
-              }`}
-            >
-              {state.message}
-            </div>
-          )}
-
-          <form ref={formRef} action={formAction} className="mt-4 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label
-                  htmlFor="create_nama_blok"
-                  className="block text-xs font-semibold text-slate-700 mb-1"
-                >
-                  Nama Blok <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  id="create_nama_blok"
-                  name="nama_blok"
-                  type="text"
-                  required
-                  maxLength={50}
-                  placeholder="Contoh: Blok A"
-                  disabled={isPending}
-                  className={`w-full rounded-lg border px-3 py-2 text-base sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 transition-colors ${
-                    state.errors?.nama_blok
-                      ? "border-rose-300 bg-rose-50/50"
-                      : "border-slate-300"
-                  }`}
-                />
-                {state.errors?.nama_blok && (
-                  <p className="mt-1 text-xs text-rose-600">
-                    {state.errors.nama_blok}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label
-                  htmlFor="create_nomor_blok"
-                  className="block text-xs font-semibold text-slate-700 mb-1"
-                >
-                  Nomor Blok / Rumah <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  id="create_nomor_blok"
-                  name="nomor_blok"
-                  type="text"
-                  required
-                  maxLength={20}
-                  placeholder="Contoh: 12 atau 05B"
-                  disabled={isPending}
-                  className={`w-full rounded-lg border px-3 py-2 text-base sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 transition-colors ${
-                    state.errors?.nomor_blok
-                      ? "border-rose-300 bg-rose-50/50"
-                      : "border-slate-300"
-                  }`}
-                />
-                {state.errors?.nomor_blok && (
-                  <p className="mt-1 text-xs text-rose-600">
-                    {state.errors.nomor_blok}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="create_nama_kepala_keluarga"
-                className="block text-xs font-semibold text-slate-700 mb-1"
-              >
-                Nama Kepala Keluarga <span className="text-rose-500">*</span>
-              </label>
-              <input
-                id="create_nama_kepala_keluarga"
-                name="nama_kepala_keluarga"
-                type="text"
-                required
-                maxLength={100}
-                placeholder="Contoh: Bpk. Bambang Pamungkas"
-                disabled={isPending}
-                className={`w-full rounded-lg border px-3 py-2 text-base sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 transition-colors ${
-                  state.errors?.nama_kepala_keluarga
-                    ? "border-rose-300 bg-rose-50/50"
-                    : "border-slate-300"
-                }`}
-              />
-              {state.errors?.nama_kepala_keluarga && (
-                <p className="mt-1 text-xs text-rose-600">
-                  {state.errors.nama_kepala_keluarga}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label
-                htmlFor="create_amount"
-                className="block text-xs font-semibold text-slate-700 mb-1"
-              >
-                Jumlah Iuran (Rp) <span className="text-rose-500">*</span>
-              </label>
-              <input
-                id="create_amount"
-                name="amount"
-                type="number"
-                min={1}
-                step={1}
-                required
-                placeholder="Contoh: 50000"
-                disabled={isPending}
-                className={`w-full rounded-lg border px-3 py-2 text-base sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 transition-colors ${
-                  state.errors?.amount
-                    ? "border-rose-300 bg-rose-50/50"
-                    : "border-slate-300"
-                }`}
-              />
-              {state.errors?.amount && (
-                <p className="mt-1 text-xs text-rose-600">{state.errors.amount}</p>
-              )}
-            </div>
-
-            <div className="pt-3 border-t border-slate-100 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                disabled={isPending}
-                className="w-full sm:w-auto py-2.5 px-4 min-h-[44px] justify-center inline-flex items-center text-xs font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                disabled={isPending}
-                className="w-full sm:w-auto py-2.5 px-4 min-h-[44px] justify-center inline-flex items-center text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
-              >
-                {isPending ? "Menyimpan..." : "Simpan Catatan Iuran"}
-              </button>
-            </div>
-          </form>
+          <ContributionFormInner key={formKey} onClose={handleClose} />
         </div>
       </dialog>
+    </>
+  );
+}
+
+function ContributionFormInner({ onClose }: { onClose: () => void }) {
+  const [state, formAction, isPending] = useActionState(
+    createIuranRecord,
+    initialState
+  );
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Handle successful creation: reset form and close dialog after short feedback
+  useEffect(() => {
+    if (state.success) {
+      if (formRef.current) {
+        formRef.current.reset();
+      }
+      const timer = setTimeout(() => {
+        onClose();
+      }, 700);
+      return () => clearTimeout(timer);
+    }
+  }, [state.success, onClose]);
+
+  return (
+    <>
+      {state.message && (
+        <div
+          role="alert"
+          className={`mt-4 p-3 rounded-lg text-xs ${
+            state.success
+              ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
+              : "bg-rose-50 border border-rose-200 text-rose-800"
+          }`}
+        >
+          {state.message}
+        </div>
+      )}
+
+      <form ref={formRef} action={formAction} className="mt-4 space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label
+              htmlFor="create_nama_blok"
+              className="block text-xs font-semibold text-slate-700 mb-1"
+            >
+              Nama Blok <span className="text-rose-500">*</span>
+            </label>
+            <input
+              id="create_nama_blok"
+              name="nama_blok"
+              type="text"
+              required
+              maxLength={50}
+              placeholder="Contoh: Blok A"
+              disabled={isPending}
+              className={`w-full rounded-lg border px-3 py-2 text-base sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 transition-colors ${
+                state.errors?.nama_blok
+                  ? "border-rose-300 bg-rose-50/50"
+                  : "border-slate-300"
+              }`}
+            />
+            {state.errors?.nama_blok && (
+              <p className="mt-1 text-xs text-rose-600">
+                {state.errors.nama_blok}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label
+              htmlFor="create_nomor_blok"
+              className="block text-xs font-semibold text-slate-700 mb-1"
+            >
+              Nomor Blok / Rumah <span className="text-rose-500">*</span>
+            </label>
+            <input
+              id="create_nomor_blok"
+              name="nomor_blok"
+              type="text"
+              required
+              maxLength={20}
+              placeholder="Contoh: 12 atau 05B"
+              disabled={isPending}
+              className={`w-full rounded-lg border px-3 py-2 text-base sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 transition-colors ${
+                state.errors?.nomor_blok
+                  ? "border-rose-300 bg-rose-50/50"
+                  : "border-slate-300"
+              }`}
+            />
+            {state.errors?.nomor_blok && (
+              <p className="mt-1 text-xs text-rose-600">
+                {state.errors.nomor_blok}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <label
+            htmlFor="create_nama_kepala_keluarga"
+            className="block text-xs font-semibold text-slate-700 mb-1"
+          >
+            Nama Kepala Keluarga <span className="text-rose-500">*</span>
+          </label>
+          <input
+            id="create_nama_kepala_keluarga"
+            name="nama_kepala_keluarga"
+            type="text"
+            required
+            maxLength={100}
+            placeholder="Contoh: Bpk. Bambang Pamungkas"
+            disabled={isPending}
+            className={`w-full rounded-lg border px-3 py-2 text-base sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 transition-colors ${
+              state.errors?.nama_kepala_keluarga
+                ? "border-rose-300 bg-rose-50/50"
+                : "border-slate-300"
+            }`}
+          />
+          {state.errors?.nama_kepala_keluarga && (
+            <p className="mt-1 text-xs text-rose-600">
+              {state.errors.nama_kepala_keluarga}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label
+            htmlFor="create_amount"
+            className="block text-xs font-semibold text-slate-700 mb-1"
+          >
+            Jumlah Iuran (Rp) <span className="text-rose-500">*</span>
+          </label>
+          <input
+            id="create_amount"
+            name="amount"
+            type="number"
+            min={1}
+            step={1}
+            required
+            placeholder="Contoh: 50000"
+            disabled={isPending}
+            className={`w-full rounded-lg border px-3 py-2 text-base sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 transition-colors ${
+              state.errors?.amount
+                ? "border-rose-300 bg-rose-50/50"
+                : "border-slate-300"
+            }`}
+          />
+          {state.errors?.amount && (
+            <p className="mt-1 text-xs text-rose-600">{state.errors.amount}</p>
+          )}
+        </div>
+
+        <div className="pt-3 border-t border-slate-100 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isPending}
+            className="w-full sm:w-auto py-2.5 px-4 min-h-[44px] justify-center inline-flex items-center text-xs font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+          >
+            Batal
+          </button>
+          <button
+            type="submit"
+            disabled={isPending}
+            className="w-full sm:w-auto py-2.5 px-4 min-h-[44px] justify-center inline-flex items-center text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+          >
+            {isPending ? "Menyimpan..." : "Simpan Catatan Iuran"}
+          </button>
+        </div>
+      </form>
     </>
   );
 }
