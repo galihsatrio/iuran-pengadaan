@@ -9,6 +9,7 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
   const [isOpen, setIsOpen] = useState(false);
   const [menuCoords, setMenuCoords] = useState<{ top: number; left: number } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [editFormKey, setEditFormKey] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isPendingDelete, startDeleteTransition] = useTransition();
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -17,12 +18,6 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
   const deleteDialogRef = useRef<HTMLDialogElement>(null);
   const triggerButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  const updateActionWithId = updateIuranRecord.bind(null, record.id);
-  const [editState, formAction, isPendingEdit] = useActionState(
-    updateActionWithId,
-    { success: false, message: "" }
-  );
 
   // Calculate viewport-aware fixed coordinates for menu
   const updateMenuPosition = () => {
@@ -130,15 +125,10 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
     }
   }, [isDeleting]);
 
-  // Handle successful edit: close dialog after state updates to success
-  useEffect(() => {
-    if (editState.success && isEditing) {
-      const timer = setTimeout(() => {
-        setIsEditing(false);
-      }, 700);
-      return () => clearTimeout(timer);
-    }
-  }, [editState.success, isEditing]);
+  const handleCloseEdit = () => {
+    setIsEditing(false);
+    setEditFormKey((k) => k + 1);
+  };
 
   const handleDelete = () => {
     setDeleteError(null);
@@ -250,7 +240,7 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
         ref={editDialogRef}
         onCancel={(e) => {
           e.preventDefault();
-          setIsEditing(false);
+          handleCloseEdit();
         }}
         aria-labelledby="edit-dialog-title"
         className="fixed inset-0 m-auto p-0 rounded-xl border border-slate-200 shadow-xl max-w-lg w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto bg-white text-slate-900 backdrop:bg-slate-900/40 backdrop:backdrop-blur-xs z-50"
@@ -265,7 +255,7 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
             </h3>
             <button
               type="button"
-              onClick={() => setIsEditing(false)}
+              onClick={handleCloseEdit}
               className="text-slate-400 hover:text-slate-600 text-sm font-semibold p-2 -mr-1.5 min-h-[36px] min-w-[36px] inline-flex items-center justify-center cursor-pointer"
               aria-label="Tutup"
             >
@@ -273,137 +263,11 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
             </button>
           </div>
 
-          {editState.message && (
-            <div
-              role="alert"
-              className={`mt-4 p-3 rounded-lg text-xs ${
-                editState.success
-                  ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
-                  : "bg-rose-50 border border-rose-200 text-rose-800"
-              }`}
-            >
-              {editState.message}
-            </div>
-          )}
-
-          <form action={formAction} className="mt-4 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label
-                  htmlFor={`edit_nama_blok_${record.id}`}
-                  className="block text-xs font-semibold text-slate-700 mb-1"
-                >
-                  Nama Blok <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  id={`edit_nama_blok_${record.id}`}
-                  name="nama_blok"
-                  type="text"
-                  required
-                  maxLength={50}
-                  defaultValue={record.nama_blok}
-                  disabled={isPendingEdit}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
-                />
-                {editState.errors?.nama_blok && (
-                  <p className="mt-1 text-xs text-rose-600">
-                    {editState.errors.nama_blok}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label
-                  htmlFor={`edit_nomor_blok_${record.id}`}
-                  className="block text-xs font-semibold text-slate-700 mb-1"
-                >
-                  Nomor Blok / Rumah <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  id={`edit_nomor_blok_${record.id}`}
-                  name="nomor_blok"
-                  type="text"
-                  required
-                  maxLength={20}
-                  defaultValue={record.nomor_blok}
-                  disabled={isPendingEdit}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
-                />
-                {editState.errors?.nomor_blok && (
-                  <p className="mt-1 text-xs text-rose-600">
-                    {editState.errors.nomor_blok}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor={`edit_nama_kepala_keluarga_${record.id}`}
-                className="block text-xs font-semibold text-slate-700 mb-1"
-              >
-                Nama Kepala Keluarga <span className="text-rose-500">*</span>
-              </label>
-              <input
-                id={`edit_nama_kepala_keluarga_${record.id}`}
-                name="nama_kepala_keluarga"
-                type="text"
-                required
-                maxLength={100}
-                defaultValue={record.nama_kepala_keluarga}
-                disabled={isPendingEdit}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
-              />
-              {editState.errors?.nama_kepala_keluarga && (
-                <p className="mt-1 text-xs text-rose-600">
-                  {editState.errors.nama_kepala_keluarga}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label
-                htmlFor={`edit_amount_${record.id}`}
-                className="block text-xs font-semibold text-slate-700 mb-1"
-              >
-                Jumlah Iuran (Rp) <span className="text-rose-500">*</span>
-              </label>
-              <input
-                id={`edit_amount_${record.id}`}
-                name="amount"
-                type="number"
-                min={1}
-                step={1}
-                required
-                defaultValue={record.amount}
-                disabled={isPendingEdit}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
-              />
-              {editState.errors?.amount && (
-                <p className="mt-1 text-xs text-rose-600">
-                  {editState.errors.amount}
-                </p>
-              )}
-            </div>
-
-            <div className="pt-3 border-t border-slate-100 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setIsEditing(false)}
-                disabled={isPendingEdit}
-                className="w-full sm:w-auto py-2.5 px-4 min-h-[44px] justify-center inline-flex items-center text-xs font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                disabled={isPendingEdit}
-                className="w-full sm:w-auto py-2.5 px-4 min-h-[44px] justify-center inline-flex items-center text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
-              >
-                {isPendingEdit ? "Menyimpan..." : "Simpan Perubahan"}
-              </button>
-            </div>
-          </form>
+          <EditIuranFormInner
+            key={editFormKey}
+            record={record}
+            onClose={handleCloseEdit}
+          />
         </div>
       </dialog>
 
@@ -465,6 +329,156 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
           </div>
         </div>
       </dialog>
+    </>
+  );
+}
+
+function EditIuranFormInner({
+  record,
+  onClose,
+}: {
+  record: IuranRecord;
+  onClose: () => void;
+}) {
+  const updateActionWithId = updateIuranRecord.bind(null, record.id);
+  const [editState, formAction, isPendingEdit] = useActionState(
+    updateActionWithId,
+    { success: false, message: "" }
+  );
+
+  return (
+    <>
+      {editState.message && (
+        <div
+          role="alert"
+          className={`mt-4 p-3 rounded-lg text-xs ${
+            editState.success
+              ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
+              : "bg-rose-50 border border-rose-200 text-rose-800"
+          }`}
+        >
+          {editState.message}
+        </div>
+      )}
+
+      <form action={formAction} className="mt-4 space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label
+              htmlFor={`edit_nama_blok_${record.id}`}
+              className="block text-xs font-semibold text-slate-700 mb-1"
+            >
+              Nama Blok <span className="text-rose-500">*</span>
+            </label>
+            <input
+              id={`edit_nama_blok_${record.id}`}
+              name="nama_blok"
+              type="text"
+              required
+              maxLength={50}
+              defaultValue={record.nama_blok}
+              disabled={isPendingEdit}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
+            />
+            {editState.errors?.nama_blok && (
+              <p className="mt-1 text-xs text-rose-600">
+                {editState.errors.nama_blok}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label
+              htmlFor={`edit_nomor_blok_${record.id}`}
+              className="block text-xs font-semibold text-slate-700 mb-1"
+            >
+              Nomor Blok / Rumah <span className="text-rose-500">*</span>
+            </label>
+            <input
+              id={`edit_nomor_blok_${record.id}`}
+              name="nomor_blok"
+              type="text"
+              required
+              maxLength={20}
+              defaultValue={record.nomor_blok}
+              disabled={isPendingEdit}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
+            />
+            {editState.errors?.nomor_blok && (
+              <p className="mt-1 text-xs text-rose-600">
+                {editState.errors.nomor_blok}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <label
+            htmlFor={`edit_nama_kepala_keluarga_${record.id}`}
+            className="block text-xs font-semibold text-slate-700 mb-1"
+          >
+            Nama Kepala Keluarga <span className="text-rose-500">*</span>
+          </label>
+          <input
+            id={`edit_nama_kepala_keluarga_${record.id}`}
+            name="nama_kepala_keluarga"
+            type="text"
+            required
+            maxLength={100}
+            defaultValue={record.nama_kepala_keluarga}
+            disabled={isPendingEdit}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
+          />
+          {editState.errors?.nama_kepala_keluarga && (
+            <p className="mt-1 text-xs text-rose-600">
+              {editState.errors.nama_kepala_keluarga}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label
+            htmlFor={`edit_amount_${record.id}`}
+            className="block text-xs font-semibold text-slate-700 mb-1"
+          >
+            Jumlah Iuran (Rp) <span className="text-rose-500">*</span>
+          </label>
+          <input
+            id={`edit_amount_${record.id}`}
+            name="amount"
+            type="number"
+            min={1}
+            step={1}
+            required
+            defaultValue={record.amount}
+            disabled={isPendingEdit}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-600"
+          />
+          {editState.errors?.amount && (
+            <p className="mt-1 text-xs text-rose-600">
+              {editState.errors.amount}
+            </p>
+          )}
+        </div>
+
+        <div className="pt-3 border-t border-slate-100 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isPendingEdit}
+            className="w-full sm:w-auto py-2.5 px-4 min-h-[44px] justify-center inline-flex items-center text-xs font-medium rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+          >
+            Batal
+          </button>
+          <button
+            type="submit"
+            disabled={isPendingEdit}
+            className="w-full sm:w-auto py-2.5 px-4 min-h-[44px] justify-center inline-flex items-center text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+          >
+            {isPendingEdit ? "Menyimpan..." : "Simpan Perubahan"}
+          </button>
+        </div>
+      </form>
     </>
   );
 }

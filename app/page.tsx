@@ -125,12 +125,12 @@ async function IuranContent() {
 
       {/* Table & Actions */}
       <section className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-4 sm:p-5 border-b border-slate-200">
+        <div className="p-3.5 sm:p-5 border-b border-slate-200">
           <div>
-            <h2 className="text-base sm:text-lg font-bold text-slate-900">
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
               Daftar Riwayat Iuran Warga
             </h2>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500 mt-0.5">
               Catatan transparan kontribusi swadaya warga
             </p>
           </div>
@@ -159,7 +159,7 @@ async function IuranContent() {
           const residentTotals = calculateResidentTotals(records);
 
           return (
-            <div className="p-4 sm:p-6 space-y-6">
+            <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
               {Object.entries(
                 records.reduce<Record<string, IuranRecord[]>>((acc, item) => {
                   const key = item.nama_blok?.trim() || "Lainnya";
@@ -175,81 +175,190 @@ async function IuranContent() {
                     0
                   );
 
+                  // Calculate true unique households and stage counts for dynamic block summary
+                  const residentMap = new Map<string, { cumulative: number; status: ReturnType<typeof calculateResidentDuesStatus> }>();
+                  for (const item of blockRecords) {
+                    const rKey = getResidentKey(item);
+                    if (!residentMap.has(rKey)) {
+                      const cumulative = residentTotals.get(rKey) || Number(item.amount || 0);
+                      const status = calculateResidentDuesStatus(cumulative);
+                      residentMap.set(rKey, { cumulative, status });
+                    }
+                  }
+                  const uniqueHouseholdCount = residentMap.size;
+                  let lunasCount = 0;
+                  const incompleteStageMap = new Map<string, { label: string; count: number; stage: number }>();
+
+                  for (const { status } of residentMap.values()) {
+                    if (status.stage === 3) {
+                      lunasCount += 1;
+                    } else {
+                      const label = status.stageLabel;
+                      const existing = incompleteStageMap.get(label);
+                      if (existing) {
+                        existing.count += 1;
+                      } else {
+                        incompleteStageMap.set(label, { label, count: 1, stage: status.stage });
+                      }
+                    }
+                  }
+                  const incompleteStages = Array.from(incompleteStageMap.values()).sort((a, b) => b.stage - a.stage);
+
                   return (
                     <div
                       key={namaBlok}
-                      className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-2xs"
+                      className="space-y-2 lg:space-y-0"
                     >
-                      {/* Compact block header (<lg and desktop): block name, jumlah KK, subtotal */}
-                      <div className="bg-slate-50/80 px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                          <h3 className="text-sm font-bold text-slate-900">
-                            Blok: {namaBlok}
-                          </h3>
-                          <span className="text-xs text-slate-500">
-                            ({blockRecords.length} KK)
-                          </span>
+                      {/* Mobile & Tablet Block Summary (< lg) */}
+                      <div className="lg:hidden bg-white rounded-lg border border-sky-100 p-3 sm:p-3.5 shadow-2xs">
+                        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" aria-hidden="true" />
+                            <h3 className="text-sm font-bold text-slate-900 leading-tight">
+                              Blok: {namaBlok}
+                            </h3>
+                            <span className="text-xs text-slate-500 font-normal">
+                              ({uniqueHouseholdCount} KK)
+                            </span>
+                          </div>
+                          <div className="text-xs font-semibold text-slate-600">
+                            Subtotal:{" "}
+                            <span className="text-emerald-700 font-bold">
+                              {formatIDR(blockTotal)}
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-xs font-semibold text-slate-700">
-                          Subtotal:{" "}
-                          <span className="text-emerald-700 font-bold">
-                            {formatIDR(blockTotal)}
-                          </span>
+
+                        {/* Badges row below: green check-circle for Lunas, amber clock for incomplete stages */}
+                        <div className="mt-2.5 pt-2 border-t border-sky-100/80 flex flex-wrap items-center gap-1.5">
+                          {lunasCount > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/80 shrink-0">
+                              <svg
+                                className="w-3.5 h-3.5 text-emerald-600 shrink-0"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                              </svg>
+                              <span>{lunasCount} Lunas</span>
+                            </span>
+                          )}
+                          {incompleteStages.map((stage) => (
+                            <span
+                              key={stage.label}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/80 shrink-0"
+                            >
+                              <svg
+                                className="w-3.5 h-3.5 text-amber-600 shrink-0"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                              </svg>
+                              <span>{stage.count} {stage.label}</span>
+                            </span>
+                          ))}
                         </div>
                       </div>
 
-                      {/* Mobile & Tablet card view (< lg) */}
-                      <div className="divide-y divide-slate-100 lg:hidden">
+                      {/* Mobile & Tablet family cards (< lg) */}
+                      <div className="space-y-2 lg:hidden">
                         {sortRecordsByCumulativePaidDesc(blockRecords, residentTotals).map((item) => {
                           const rKey = getResidentKey(item);
                           const cumulative = residentTotals.get(rKey) || Number(item.amount || 0);
                           const duesStatus = calculateResidentDuesStatus(cumulative);
 
                           return (
-                            <div key={item.id} className="p-3.5 sm:p-4 hover:bg-slate-50/60 transition-colors">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
-                                      No. {item.nomor_blok || "-"}
-                                    </span>
-                                    <span className="font-semibold text-slate-900 text-sm truncate">
-                                      {item.nama_kepala_keluarga || "-"}
-                                    </span>
+                            <div
+                              key={item.id}
+                              className="bg-white rounded-lg border border-sky-100 p-2.5 sm:p-3 shadow-2xs hover:border-sky-200 transition-colors"
+                            >
+                              <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1.5 sm:gap-3">
+                                {/* Section 1 (Left): house icon + Rumah {nomor_blok} then bold full household head name (wrap, never truncate) */}
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+                                    <svg
+                                      className="w-3.5 h-3.5 text-slate-400 shrink-0"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                      aria-hidden="true"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                                      />
+                                    </svg>
+                                    <span>Rumah {item.nomor_blok || "-"}</span>
+                                  </div>
+                                  <div className="font-bold text-slate-900 text-xs sm:text-sm leading-snug mt-0.5 break-words">
+                                    {item.nama_kepala_keluarga || "-"}
                                   </div>
                                 </div>
-                                <div className="text-right shrink-0">
-                                  <div className="text-sm font-bold text-emerald-700">
+
+                                {/* Section 2 (Middle): subtle vertical divider, Iuran and full green amount */}
+                                <div className="shrink-0 border-l border-slate-200/80 pl-2 sm:pl-3">
+                                  <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 block leading-tight">
+                                    Iuran
+                                  </span>
+                                  <span className="text-xs sm:text-sm font-bold text-emerald-700 block mt-0.5 whitespace-nowrap">
                                     {formatIDR(item.amount)}
-                                  </div>
+                                  </span>
                                 </div>
-                              </div>
 
-                              <div className="mt-2.5 pt-2 border-t border-slate-100/80 flex flex-wrap items-center justify-between gap-2 text-xs">
-                                <span
-                                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                                    duesStatus.stage === 3
-                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                                      : duesStatus.stage === 2
-                                      ? "bg-blue-100 text-blue-800 border border-blue-200"
-                                      : duesStatus.stage === 1
-                                      ? "bg-amber-100 text-amber-800 border border-amber-200"
-                                      : "bg-slate-100 text-slate-600 border border-slate-200"
-                                  }`}
-                                >
-                                  {duesStatus.stageLabel}
-                                </span>
-
-                                <div className="text-slate-500 font-medium ml-auto flex items-center gap-1.5">
-                                  <span>Sisa:</span>
-                                  {duesStatus.outstandingBalance > 0 ? (
-                                    <span className="text-amber-700 font-semibold">
-                                      {formatIDR(duesStatus.outstandingBalance)}
+                                {/* Section 3 (Right): full pill status */}
+                                <div className="shrink-0 flex items-center justify-end">
+                                  {duesStatus.stage === 3 ? (
+                                    <span className="inline-flex items-center gap-1 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/90 whitespace-nowrap leading-none">
+                                      <svg
+                                        className="w-3.5 h-3.5 text-emerald-600 shrink-0"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                        aria-hidden="true"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                        />
+                                      </svg>
+                                      <span>Tahap 3 &bull; Lunas</span>
                                     </span>
                                   ) : (
-                                    <span className="text-emerald-700 font-semibold">
-                                      Lunas (Rp0)
+                                    <span className="inline-flex items-center gap-1 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/90 whitespace-nowrap leading-none">
+                                      <svg
+                                        className="w-3.5 h-3.5 text-amber-600 shrink-0"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                        aria-hidden="true"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                        />
+                                      </svg>
+                                      <span>{duesStatus.stageLabel}</span>
                                     </span>
                                   )}
                                 </div>
@@ -260,8 +369,27 @@ async function IuranContent() {
                       </div>
 
                       {/* Desktop table view (>= lg) */}
-                      <div className="hidden lg:block overflow-x-auto">
-                        <table className="w-full text-left text-sm text-slate-700 min-w-[620px]">
+                      <div className="hidden lg:block border border-slate-200 rounded-lg overflow-hidden bg-white shadow-2xs">
+                        <div className="bg-slate-50/80 px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                            <h3 className="text-sm font-bold text-slate-900">
+                              Blok: {namaBlok}
+                            </h3>
+                            <span className="text-xs text-slate-500">
+                              ({uniqueHouseholdCount} KK)
+                            </span>
+                          </div>
+                          <div className="text-xs font-semibold text-slate-700">
+                            Subtotal:{" "}
+                            <span className="text-emerald-700 font-bold">
+                              {formatIDR(blockTotal)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-sm text-slate-700 min-w-[620px]">
                           <thead className="bg-slate-50/50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
                             <tr>
                               <th scope="col" className="py-2.5 px-4 w-12 text-center">
@@ -357,8 +485,9 @@ async function IuranContent() {
                         </table>
                       </div>
                     </div>
-                  );
-                })}
+                  </div>
+                );
+              })}
             </div>
           );
         })()}

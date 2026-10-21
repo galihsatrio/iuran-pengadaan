@@ -119,18 +119,12 @@ function ContributionFormInner({ onClose }: { onClose: () => void }) {
   );
   const formRef = useRef<HTMLFormElement>(null);
 
-  // Handle successful creation: reset form and close dialog after short feedback
+  // Handle successful creation: reset form inputs so user can add another entry without closing modal
   useEffect(() => {
-    if (state.success) {
-      if (formRef.current) {
-        formRef.current.reset();
-      }
-      const timer = setTimeout(() => {
-        onClose();
-      }, 700);
-      return () => clearTimeout(timer);
+    if (state.success && formRef.current) {
+      formRef.current.reset();
     }
-  }, [state.success, onClose]);
+  }, [state.success]);
 
   return (
     <>
