@@ -65,11 +65,11 @@ async function IuranContent() {
           Ringkasan Kas Iuran &amp; Pengeluaran
         </h2>
         <div className={`grid grid-cols-1 sm:grid-cols-2 ${showExpenses ? "lg:grid-cols-4" : "lg:grid-cols-2"} gap-4`}>
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Total Dana Terkumpul
             </span>
-            <p className="mt-2 text-2xl sm:text-3xl font-extrabold text-emerald-600">
+            <p className="mt-2 text-xl sm:text-2xl lg:text-xl xl:text-2xl 2xl:text-3xl font-extrabold text-emerald-600 break-words tracking-tight">
               {formatIDR(cashFlow.totalIncome)}
             </p>
             <p className="mt-1 text-xs text-slate-500">
@@ -79,11 +79,11 @@ async function IuranContent() {
 
           {showExpenses && (
             <>
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
+              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Total Pengeluaran
                 </span>
-                <p className="mt-2 text-2xl sm:text-3xl font-extrabold text-rose-600">
+                <p className="mt-2 text-xl sm:text-2xl lg:text-xl xl:text-2xl 2xl:text-3xl font-extrabold text-rose-600 break-words tracking-tight">
                   {formatIDR(cashFlow.totalExpense)}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
@@ -91,12 +91,12 @@ async function IuranContent() {
                 </p>
               </div>
 
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
+              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Saldo Kas Bersih
                 </span>
                 <p
-                  className={`mt-2 text-2xl sm:text-3xl font-extrabold ${
+                  className={`mt-2 text-xl sm:text-2xl lg:text-xl xl:text-2xl 2xl:text-3xl font-extrabold break-words tracking-tight ${
                     cashFlow.netBalance >= 0 ? "text-emerald-700" : "text-rose-700"
                   }`}
                 >
@@ -109,11 +109,11 @@ async function IuranContent() {
             </>
           )}
 
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Jumlah Partisipasi
             </span>
-            <p className="mt-2 text-2xl sm:text-3xl font-extrabold text-slate-800">
+            <p className="mt-2 text-xl sm:text-2xl lg:text-xl xl:text-2xl 2xl:text-3xl font-extrabold text-slate-800 break-words tracking-tight">
               {records.length} <span className="text-base font-medium text-slate-500">Warga</span>
             </p>
             <p className="mt-1 text-xs text-slate-500">
@@ -180,6 +180,7 @@ async function IuranContent() {
                       key={namaBlok}
                       className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-2xs"
                     >
+                      {/* Compact block header (<lg and desktop): block name, jumlah KK, subtotal */}
                       <div className="bg-slate-50/80 px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -187,7 +188,7 @@ async function IuranContent() {
                             Blok: {namaBlok}
                           </h3>
                           <span className="text-xs text-slate-500">
-                            ({blockRecords.length} catatan)
+                            ({blockRecords.length} KK)
                           </span>
                         </div>
                         <div className="text-xs font-semibold text-slate-700">
@@ -198,7 +199,68 @@ async function IuranContent() {
                         </div>
                       </div>
 
-                      <div className="overflow-x-auto">
+                      {/* Mobile & Tablet card view (< lg) */}
+                      <div className="divide-y divide-slate-100 lg:hidden">
+                        {sortRecordsByCumulativePaidDesc(blockRecords, residentTotals).map((item) => {
+                          const rKey = getResidentKey(item);
+                          const cumulative = residentTotals.get(rKey) || Number(item.amount || 0);
+                          const duesStatus = calculateResidentDuesStatus(cumulative);
+
+                          return (
+                            <div key={item.id} className="p-3.5 sm:p-4 hover:bg-slate-50/60 transition-colors">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
+                                      No. {item.nomor_blok || "-"}
+                                    </span>
+                                    <span className="font-semibold text-slate-900 text-sm truncate">
+                                      {item.nama_kepala_keluarga || "-"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <div className="text-sm font-bold text-emerald-700">
+                                    {formatIDR(item.amount)}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="mt-2.5 pt-2 border-t border-slate-100/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                                    duesStatus.stage === 3
+                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                      : duesStatus.stage === 2
+                                      ? "bg-blue-100 text-blue-800 border border-blue-200"
+                                      : duesStatus.stage === 1
+                                      ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                      : "bg-slate-100 text-slate-600 border border-slate-200"
+                                  }`}
+                                >
+                                  {duesStatus.stageLabel}
+                                </span>
+
+                                <div className="text-slate-500 font-medium ml-auto flex items-center gap-1.5">
+                                  <span>Sisa:</span>
+                                  {duesStatus.outstandingBalance > 0 ? (
+                                    <span className="text-amber-700 font-semibold">
+                                      {formatIDR(duesStatus.outstandingBalance)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-emerald-700 font-semibold">
+                                      Lunas (Rp0)
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Desktop table view (>= lg) */}
+                      <div className="hidden lg:block overflow-x-auto">
                         <table className="w-full text-left text-sm text-slate-700 min-w-[620px]">
                           <thead className="bg-slate-50/50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
                             <tr>
