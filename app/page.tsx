@@ -10,6 +10,7 @@ import { getPaymentSettings } from "@/lib/payment-settings";
 import { getPublicGalleryItems } from "@/lib/gallery";
 import type { IuranRecord, PublicExpense, PublicGalleryItem } from "@/lib/types";
 import {
+  DUES_TARGET,
   calculateResidentTotals,
   calculateResidentDuesStatus,
   calculateResidentExcessDonations,
@@ -503,85 +504,262 @@ async function IuranContent() {
         return (
           <section
             aria-labelledby="donations-heading"
-            className="bg-white rounded-xl border border-amber-200/80 shadow-xs overflow-hidden mt-8"
+            className="bg-white rounded-xl border border-amber-200/90 shadow-2xs overflow-hidden mt-8"
           >
-            <div className="p-4 sm:p-5 border-b border-amber-100 bg-amber-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-xs">
-                    ⭐
+            <div className="p-3.5 sm:p-5 border-b border-amber-100 bg-amber-50/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 sm:gap-2.5">
+                  <span className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-amber-100 text-amber-700 shrink-0">
+                    <svg
+                      className="w-3.5 h-3.5 fill-amber-400 stroke-amber-600"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+                      />
+                    </svg>
                   </span>
-                  <h2 id="donations-heading" className="text-base sm:text-lg font-bold text-slate-900">
+                  <h2 id="donations-heading" className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
                     Sumbangan &amp; Apresiasi Warga
                   </h2>
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Apresiasi dan terima kasih warga yang berpartisipasi sukarela melebihi target iuran wajib Rp75.000
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Apresiasi dan terima kasih warga yang berpartisipasi sukarela melebihi target iuran wajib {formatIDR(DUES_TARGET)}
                 </p>
               </div>
-              <div className="text-xs font-semibold text-slate-700 bg-white px-3 py-1.5 rounded-lg border border-amber-200 self-start sm:self-auto shadow-2xs">
-                Total Sumbangan Sukarela:{" "}
-                <span className="text-amber-700 font-bold">
+              <div className="inline-flex flex-wrap items-center justify-between sm:justify-start gap-1.5 sm:gap-2 px-3 py-1.5 sm:py-2 rounded-lg border border-amber-300 bg-white/90 text-xs font-semibold text-slate-700 shadow-2xs self-start sm:self-auto shrink-0 max-w-full">
+                <span className="text-slate-600">Total Sumbangan Sukarela:</span>
+                <span className="text-amber-700 font-bold text-xs sm:text-sm whitespace-nowrap">
                   {formatIDR(totalDonations)}
                 </span>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-slate-700 min-w-[560px]">
-                <thead className="bg-slate-50/50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
+            {/* Mobile Dedicated Compact Cards (< md) */}
+            <div className="p-3 sm:p-4 space-y-2.5 md:hidden bg-amber-50/10">
+              {donations.map((donor, idx) => {
+                const duesStatus = calculateResidentDuesStatus(donor.cumulativePaid);
+
+                return (
+                  <div
+                    key={donor.residentKey}
+                    className="bg-white rounded-lg border border-sky-100 p-3 shadow-2xs hover:border-sky-200 transition-colors"
+                  >
+                    {/* Header: Numbered badge + House/Unit + Status */}
+                    <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-100 text-slate-500 font-mono text-[11px] font-semibold shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div className="flex items-center gap-1 text-xs text-slate-500 font-medium min-w-0">
+                          <svg
+                            className="w-3.5 h-3.5 text-slate-400 shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                            />
+                          </svg>
+                          <span className="min-w-0 break-words">
+                            Blok {donor.namaBlok} No. {donor.nomorBlok}
+                          </span>
+                        </div>
+                      </div>
+
+                      {duesStatus.stage === 3 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/90 shrink-0 whitespace-nowrap leading-none">
+                          <svg
+                            className="w-3.5 h-3.5 text-emerald-600 shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          <span>Lunas {formatIDR(DUES_TARGET)}</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/90 shrink-0 whitespace-nowrap leading-none">
+                          <svg
+                            className="w-3.5 h-3.5 text-amber-600 shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          <span>{duesStatus.stageLabel}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Resident full bold name */}
+                    <div className="font-bold text-slate-900 text-xs sm:text-sm leading-snug mt-1.5 break-words">
+                      {donor.namaKepalaKeluarga || "Warga"}
+                    </div>
+
+                    {/* Breakdown in compact readable rows, amounts never clipped */}
+                    <div className="mt-2.5 pt-2 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
+                      <div className="min-w-0">
+                        <span className="text-[10px] uppercase font-medium tracking-wider text-slate-400 block leading-tight">
+                          Total Bayar
+                        </span>
+                        <span className="font-semibold text-slate-700 block mt-0.5 break-words [overflow-wrap:anywhere]">
+                          {formatIDR(donor.cumulativePaid)}
+                        </span>
+                      </div>
+                      <div className="min-w-0 text-right">
+                        <span className="text-[10px] uppercase font-medium tracking-wider text-amber-700 block leading-tight">
+                          Sumbangan Sukarela
+                        </span>
+                        <span className="font-bold text-amber-700 block mt-0.5 break-words [overflow-wrap:anywhere]">
+                          + {formatIDR(donor.excessAmount)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Mobile Summary Total Card */}
+              <div className="bg-amber-50/60 rounded-lg border border-amber-200/80 p-2.5 text-xs flex flex-wrap items-center justify-between gap-1.5 text-slate-700 font-semibold">
+                <span className="min-w-0">Total Seluruh Sumbangan:</span>
+                <span className="text-amber-800 font-bold text-sm text-right break-words [overflow-wrap:anywhere]">
+                  {formatIDR(totalDonations)}
+                </span>
+              </div>
+            </div>
+
+            {/* Desktop & Tablet Table (>= md) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-sm text-slate-700">
+                <thead className="bg-slate-50/80 text-xs uppercase font-semibold text-slate-600 border-b border-slate-200/90 tracking-wider">
                   <tr>
-                    <th scope="col" className="py-2.5 px-4 w-12 text-center">
+                    <th scope="col" className="py-3 px-4 w-12 text-center">
                       No
                     </th>
-                    <th scope="col" className="py-2.5 px-4">
+                    <th scope="col" className="py-3 px-4">
                       Warga &amp; Unit Rumah
                     </th>
-                    <th scope="col" className="py-2.5 px-4 text-right">
+                    <th scope="col" className="py-3 px-4 text-right">
                       Total Bayar
                     </th>
-                    <th scope="col" className="py-2.5 px-4 text-center">
+                    <th scope="col" className="py-3 px-4 text-center">
                       Iuran Wajib
                     </th>
-                    <th scope="col" className="py-2.5 px-4 text-right">
+                    <th scope="col" className="py-3 px-4 text-right">
                       Kelebihan (Sumbangan)
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {donations.map((donor, idx) => (
-                    <tr key={donor.residentKey} className="hover:bg-amber-50/20 transition-colors">
-                      <td className="py-2.5 px-4 text-center text-slate-400 text-xs font-mono">
-                        {idx + 1}
-                      </td>
-                      <td className="py-2.5 px-4">
-                        <span className="font-semibold text-slate-800">
-                          {donor.namaKepalaKeluarga || "Warga"}
-                        </span>
-                        <span className="block text-xs text-slate-500">
-                          Blok {donor.namaBlok} No. {donor.nomorBlok}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-4 text-right font-medium text-slate-600">
-                        {formatIDR(donor.cumulativePaid)}
-                      </td>
-                      <td className="py-2.5 px-4 text-center">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                          Lunas Rp75.000
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-4 text-right font-bold text-amber-700">
-                        + {formatIDR(donor.excessAmount)}
-                      </td>
-                    </tr>
-                  ))}
+                  {donations.map((donor, idx) => {
+                    const duesStatus = calculateResidentDuesStatus(donor.cumulativePaid);
+
+                    return (
+                      <tr key={donor.residentKey} className="hover:bg-amber-50/20 transition-colors">
+                        <td className="py-3 px-4 text-center text-slate-400 text-xs font-mono">
+                          {idx + 1}
+                        </td>
+                        <td className="py-3 px-4 min-w-0">
+                          <span className="font-semibold text-slate-900 block break-words">
+                            {donor.namaKepalaKeluarga || "Warga"}
+                          </span>
+                          <span className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
+                            <svg
+                              className="w-3.5 h-3.5 text-slate-400 shrink-0"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                              />
+                            </svg>
+                            <span>Blok {donor.namaBlok} No. {donor.nomorBlok}</span>
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right font-semibold text-slate-700 whitespace-nowrap">
+                          {formatIDR(donor.cumulativePaid)}
+                        </td>
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                          {duesStatus.stage === 3 ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/90">
+                              <svg
+                                className="w-3.5 h-3.5 text-emerald-600 shrink-0"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                              </svg>
+                              <span>Lunas {formatIDR(DUES_TARGET)}</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/90">
+                              <svg
+                                className="w-3.5 h-3.5 text-amber-600 shrink-0"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                              </svg>
+                              <span>{duesStatus.stageLabel}</span>
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right font-bold text-amber-700 whitespace-nowrap">
+                          + {formatIDR(donor.excessAmount)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
-                <tfoot className="bg-amber-50/30 font-semibold text-xs border-t border-amber-200 text-slate-700">
+                <tfoot className="bg-amber-50/40 font-semibold text-xs border-t border-amber-200/80 text-slate-700">
                   <tr>
-                    <td colSpan={4} className="py-2.5 px-4 text-right">
+                    <td colSpan={4} className="py-3 px-4 text-right text-slate-600">
                       Total Seluruh Sumbangan Warga:
                     </td>
-                    <td className="py-2.5 px-4 text-right text-amber-800 font-bold">
+                    <td className="py-3 px-4 text-right text-amber-800 font-bold text-sm whitespace-nowrap">
                       {formatIDR(totalDonations)}
                     </td>
                   </tr>
