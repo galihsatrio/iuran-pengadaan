@@ -136,6 +136,27 @@ export interface ExpenseValidationResult {
   };
 }
 
+export interface BatchExpenseItemInput {
+  description?: unknown;
+  amount?: unknown;
+}
+
+export interface BatchExpenseItemSanitized {
+  description: string;
+  amount: number;
+}
+
+export interface BatchExpenseValidationResult {
+  valid: boolean;
+  errors: Record<string, string>;
+  sanitized?: {
+    date: string;
+    procurement_group: string | null;
+    items: BatchExpenseItemSanitized[];
+    totalAmount: number;
+  };
+}
+
 export interface GalleryValidationResult {
   valid: boolean;
   errors: Record<string, string>;
@@ -249,6 +270,93 @@ export function validateExpenseInput(data: {
       description: rawDesc,
       amount: numAmount,
       procurement_group: rawGroup || null,
+    },
+  };
+}
+
+// Validates multi-material expense batch submitted together with shared date & procurement_group.
+// Strictly validates every individual material row without silent row skipping.
+export function validateBatchExpenseInput(data: {
+  date?: unknown;
+  procurement_group?: unknown;
+  items?: BatchExpenseItemInput[];
+}): BatchExpenseValidationResult {
+  const errors: Record<string, string> = {};
+
+  const rawDate = typeof data.date === "string" ? data.date.trim() : "";
+  const rawGroup = typeof data.procurement_group === "string" ? data.procurement_group.trim() : "";
+
+  if (!rawDate) {
+    errors.date = "Tanggal pengeluaran wajib diisi.";
+  } else if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    errors.date = "Format tanggal harus YYYY-MM-DD (contoh: 2025-10-19).";
+  } else {
+    const [y, m, d] = rawDate.split("-").map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    if (
+      isNaN(dateObj.getTime()) ||
+      dateObj.getFullYear() !== y ||
+      dateObj.getMonth() !== m - 1 ||
+      dateObj.getDate() !== d
+    ) {
+      errors.date = "Tanggal kalender tidak valid.";
+    }
+  }
+
+  if (rawGroup && rawGroup.length > 100) {
+    errors.procurement_group = "Nama kelompok pengadaan maksimal 100 karakter.";
+  }
+
+  const rawItems = Array.isArray(data.items) ? data.items : [];
+  if (rawItems.length === 0) {
+    errors.items = "Minimal satu rincian pengeluaran harus diisi.";
+  }
+
+  const sanitizedItems: BatchExpenseItemSanitized[] = [];
+  let totalAmount = 0;
+
+  for (let i = 0; i < rawItems.length; i++) {
+    const it = rawItems[i];
+    const rawDesc = typeof it?.description === "string" ? it.description.trim() : "";
+    const rawAmount = typeof it?.amount === "string" ? it.amount.trim() : it?.amount;
+
+    if (!rawDesc) {
+      errors[`items.${i}.description`] = `Keterangan item ke-${i + 1} wajib diisi.`;
+    } else if (rawDesc.length > 255) {
+      errors[`items.${i}.description`] = `Keterangan item ke-${i + 1} maksimal 255 karakter.`;
+    }
+
+    const numAmount = Number(rawAmount);
+    if (rawAmount === undefined || rawAmount === null || rawAmount === "") {
+      errors[`items.${i}.amount`] = `Nominal item ke-${i + 1} wajib diisi.`;
+    } else if (isNaN(numAmount) || !Number.isInteger(numAmount) || numAmount <= 0) {
+      errors[`items.${i}.amount`] = `Nominal item ke-${i + 1} harus berupa bilangan bulat positif (contoh: 50000).`;
+    } else if (numAmount > 1_000_000_000) {
+      errors[`items.${i}.amount`] = `Nominal item ke-${i + 1} melebihi batas wajar (maksimal Rp 1.000.000.000).`;
+    } else {
+      totalAmount += numAmount;
+    }
+
+    if (rawDesc && numAmount > 0 && Number.isInteger(numAmount) && numAmount <= 1_000_000_000) {
+      sanitizedItems.push({
+        description: rawDesc,
+        amount: numAmount,
+      });
+    }
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return { valid: false, errors };
+  }
+
+  return {
+    valid: true,
+    errors: {},
+    sanitized: {
+      date: rawDate,
+      procurement_group: rawGroup || null,
+      items: sanitizedItems,
+      totalAmount,
     },
   };
 }

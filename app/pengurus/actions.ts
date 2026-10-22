@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { validateIuranInput, validateBendaharaInput, validateTreasurerInput, validateExpenseInput, validateGalleryInput, validateHomeExpensesSettingInput, validateHomeVisibilitySettingsInput } from "@/lib/validation";
+import { validateIuranInput, validateBendaharaInput, validateTreasurerInput, validateExpenseInput, validateBatchExpenseInput, validateGalleryInput, validateHomeExpensesSettingInput, validateHomeVisibilitySettingsInput } from "@/lib/validation";
 import {
   validateImageBuffer,
   MAX_FILE_SIZE_BYTES,
@@ -1066,14 +1066,39 @@ export async function createExpenseAction(
     };
   }
 
-  const raw = {
-    date: formData.get("date"),
-    description: formData.get("description"),
-    amount: formData.get("amount"),
-    procurement_group: formData.get("procurement_group"),
-  };
+  const rawGroup = formData.get("procurement_group");
+  const rawDate = formData.get("date");
 
-  const validation = validateExpenseInput(raw);
+  // Read dynamic multi-material rows if submitted
+  const itemDescriptions = formData.getAll("item_description");
+  const itemAmounts = formData.getAll("item_amount");
+
+  let items: Array<{ description: unknown; amount: unknown }> = [];
+
+  if (itemDescriptions.length > 0 || itemAmounts.length > 0) {
+    const maxLen = Math.max(itemDescriptions.length, itemAmounts.length);
+    for (let i = 0; i < maxLen; i++) {
+      items.push({
+        description: itemDescriptions[i],
+        amount: itemAmounts[i],
+      });
+    }
+  } else {
+    // Fallback for single item (legacy / direct API callers)
+    items = [
+      {
+        description: formData.get("description"),
+        amount: formData.get("amount"),
+      },
+    ];
+  }
+
+  const validation = validateBatchExpenseInput({
+    date: rawDate,
+    procurement_group: rawGroup,
+    items,
+  });
+
   if (!validation.valid || !validation.sanitized) {
     return {
       success: false,
@@ -1081,6 +1106,8 @@ export async function createExpenseAction(
       errors: validation.errors,
     };
   }
+
+  const sanitized = validation.sanitized;
 
   let receiptStoragePath: string | null = null;
   const receiptFile = formData.get("receipt");
@@ -1121,15 +1148,19 @@ export async function createExpenseAction(
     }
   }
 
-  const { error: insertError } = await supabase.from("expenses").insert({
-    date: validation.sanitized.date,
-    description: validation.sanitized.description,
-    amount: validation.sanitized.amount,
-    procurement_group: validation.sanitized.procurement_group,
+  const recordsToInsert = sanitized.items.map((item) => ({
+    date: sanitized.date,
+    description: item.description,
+    amount: item.amount,
+    procurement_group: sanitized.procurement_group,
     receipt_path: receiptStoragePath,
     created_by: user.id,
     updated_by: user.id,
-  });
+  }));
+
+  const { error: insertError } = await supabase
+    .from("expenses")
+    .insert(recordsToInsert);
 
   if (insertError) {
     // Rollback uploaded storage receipt on DB insert failure
@@ -1158,9 +1189,17 @@ export async function createExpenseAction(
   revalidatePath("/pengurus");
   revalidatePath("/pengurus/pengeluaran");
 
+  const itemCount = sanitized.items.length;
+  const groupLabel = sanitized.procurement_group
+    ? `kelompok "${sanitized.procurement_group}" `
+    : "";
+
   return {
     success: true,
-    message: `Pengeluaran sebesar Rp ${validation.sanitized.amount.toLocaleString("id-ID")} berhasil dicatat.`,
+    message:
+      itemCount === 1
+        ? `Pengeluaran ${groupLabel}sebesar Rp ${sanitized.totalAmount.toLocaleString("id-ID")} berhasil dicatat.`
+        : `Berhasil mencatat ${itemCount} item pengeluaran ${groupLabel}dengan total Rp ${sanitized.totalAmount.toLocaleString("id-ID")}.`,
   };
 }
 
@@ -1340,10 +1379,17 @@ export async function updateExpenseAction(
     };
   }
 
-  // Cleanup old receipt file from storage if it was removed or replaced
+  // Cleanup old receipt file from storage if it was removed or replaced AND no other record shares it
   if (oldReceiptToDelete && oldReceiptToDelete !== finalReceiptPath) {
     try {
-      await supabase.storage.from("expense-receipts").remove([oldReceiptToDelete]);
+      const { count, error: countError } = await supabase
+        .from("expenses")
+        .select("id", { count: "exact", head: true })
+        .eq("receipt_path", oldReceiptToDelete);
+
+      if (!countError && count === 0) {
+        await supabase.storage.from("expense-receipts").remove([oldReceiptToDelete]);
+      }
     } catch {
       // Ignore cleanup error
     }
@@ -1445,10 +1491,17 @@ export async function deleteExpenseAction(id: number): Promise<ActionResult> {
     };
   }
 
-  // Clean up receipt image from storage if present
+  // Clean up receipt image from storage if present AND no other record shares it
   if (record?.receipt_path) {
     try {
-      await supabase.storage.from("expense-receipts").remove([record.receipt_path]);
+      const { count, error: countError } = await supabase
+        .from("expenses")
+        .select("id", { count: "exact", head: true })
+        .eq("receipt_path", record.receipt_path);
+
+      if (!countError && count === 0) {
+        await supabase.storage.from("expense-receipts").remove([record.receipt_path]);
+      }
     } catch {
       // Ignore storage cleanup error
     }

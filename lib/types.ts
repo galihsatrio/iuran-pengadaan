@@ -68,6 +68,17 @@ export interface ExpenseInput {
   procurement_group?: string | null;
 }
 
+export interface BatchExpenseItemInput {
+  description: string;
+  amount: number;
+}
+
+export interface BatchExpenseInput {
+  date: string;
+  procurement_group?: string | null;
+  items: BatchExpenseItemInput[];
+}
+
 export type GalleryCategory = "kegiatan" | "hasil";
 
 export interface PublicGalleryItem {

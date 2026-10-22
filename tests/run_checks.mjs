@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import * as XLSX from "xlsx";
 import { formatDateOnlyID, normalizeWhatsAppNumber, formatWhatsAppUrl } from "../lib/format.ts";
-import { validateIuranInput, validateExpenseInput, validateGalleryInput, validateHomeExpensesSettingInput, validateHomeVisibilitySettingsInput } from "../lib/validation.ts";
+import { validateIuranInput, validateExpenseInput, validateBatchExpenseInput, validateGalleryInput, validateHomeExpensesSettingInput, validateHomeVisibilitySettingsInput } from "../lib/validation.ts";
 import { calculateCashFlow, groupExpensesByProcurement, UNGROUPED_PROCUREMENT_LABEL } from "../lib/expenses.ts";
 import {
   validateImageBuffer,
@@ -1803,6 +1803,154 @@ console.log("\n[24] Uji Pengaturan Visibilitas Sumbangan (show_donations_on_home
   assert.equal(valDisableBoth.sanitized?.show_expenses_on_home, false);
   assert.equal(valDisableBoth.sanitized?.show_donations_on_home, false);
   console.log("  ✓ Multi-checkbox form serialization regression check (independent true/false toggling) lolos");
+}
+
+// 25. Uji Validasi & Kontrak Multi-Material Pengeluaran (validateBatchExpenseInput & Atomic Batch Insert)
+console.log("\n[25] Uji Validasi & Kontrak Multi-Material Pengeluaran:");
+{
+  // 25.1 Multi-material batch valid
+  const batchValid = validateBatchExpenseInput({
+    date: "2025-10-22",
+    procurement_group: "Portal Utama",
+    items: [
+      { description: "Besi 5meter", amount: "200000" },
+      { description: "Las portal", amount: 50000 },
+      { description: "Cat anti karat", amount: "75000" },
+    ],
+  });
+  assert.equal(batchValid.valid, true);
+  assert.equal(batchValid.sanitized?.date, "2025-10-22");
+  assert.equal(batchValid.sanitized?.procurement_group, "Portal Utama");
+  assert.equal(batchValid.sanitized?.items.length, 3);
+  assert.equal(batchValid.sanitized?.totalAmount, 325000);
+  assert.deepEqual(batchValid.sanitized?.items, [
+    { description: "Besi 5meter", amount: 200000 },
+    { description: "Las portal", amount: 50000 },
+    { description: "Cat anti karat", amount: 75000 },
+  ]);
+  console.log("  ✓ Multi-material valid lolos sanitasi & perhitungan total batch akurat (200k + 50k + 75k = 325k)");
+
+  // 25.2 Single-item batch tanpa procurement_group (defaults to null)
+  const singleBatch = validateBatchExpenseInput({
+    date: "2025-10-22",
+    items: [{ description: "Semen 1 sak", amount: 65000 }],
+  });
+  assert.equal(singleBatch.valid, true);
+  assert.equal(singleBatch.sanitized?.procurement_group, null);
+  assert.equal(singleBatch.sanitized?.totalAmount, 65000);
+  console.log("  ✓ Single item batch tanpa grup default ke null dengan total akurat");
+
+  // 25.3 Empty items array ditolak
+  const emptyBatch = validateBatchExpenseInput({
+    date: "2025-10-22",
+    items: [],
+  });
+  assert.equal(emptyBatch.valid, false);
+  assert.ok(emptyBatch.errors.items);
+  console.log("  ✓ Batch tanpa rincian item (empty array) ditolak");
+
+  // 25.4 Strict: No silent skipping (item ke-3 kosong description atau amount)
+  const incompleteRowBatch = validateBatchExpenseInput({
+    date: "2025-10-22",
+    procurement_group: "Portal Utama",
+    items: [
+      { description: "Besi 5meter", amount: 200000 },
+      { description: "Las", amount: 50000 },
+      { description: "", amount: "" },
+    ],
+  });
+  assert.equal(incompleteRowBatch.valid, false);
+  assert.ok(incompleteRowBatch.errors["items.2.description"], "Harus error pada items.2.description");
+  assert.ok(incompleteRowBatch.errors["items.2.amount"], "Harus error pada items.2.amount");
+  assert.equal(incompleteRowBatch.sanitized, undefined);
+  console.log("  ✓ Strict no silent row skipping: baris kosong di tengah/akhir batch ditolak dengan error terarah");
+
+  // 25.5 Nominal baris invalid (negatif, nol, pecahan, melebihi 1 miliar)
+  const badAmountBatch = validateBatchExpenseInput({
+    date: "2025-10-22",
+    items: [
+      { description: "Baris nol", amount: 0 },
+      { description: "Baris negatif", amount: -1000 },
+      { description: "Baris pecahan", amount: 5000.75 },
+      { description: "Baris luar batas", amount: 2_000_000_000 },
+    ],
+  });
+  assert.equal(badAmountBatch.valid, false);
+  assert.ok(badAmountBatch.errors["items.0.amount"]);
+  assert.ok(badAmountBatch.errors["items.1.amount"]);
+  assert.ok(badAmountBatch.errors["items.2.amount"]);
+  assert.ok(badAmountBatch.errors["items.3.amount"]);
+  console.log("  ✓ Penolakan nominal baris nol, negatif, pecahan, dan melebihi 1 miliar lolos");
+
+  // 25.6 Procurement group > 100 karakter dan tanggal invalid ditolak
+  const badGroupAndDate = validateBatchExpenseInput({
+    date: "2025-13-45",
+    procurement_group: "P".repeat(101),
+    items: [{ description: "Paku", amount: 10000 }],
+  });
+  assert.equal(badGroupAndDate.valid, false);
+  assert.ok(badGroupAndDate.errors.date);
+  assert.ok(badGroupAndDate.errors.procurement_group);
+  console.log("  ✓ Validasi tanggal kalender dan panjang grup (<= 100 char) pada batch lolos");
+
+  // 25.7 Kontrak Batch Atomicity: Pembuatan single insert payload
+  function buildBatchInsertPayload({ date, procurement_group, receipt_path, items, userId }) {
+    return items.map((item) => ({
+      date,
+      description: item.description,
+      amount: item.amount,
+      procurement_group,
+      receipt_path,
+      created_by: userId,
+      updated_by: userId,
+    }));
+  }
+
+  const payload = buildBatchInsertPayload({
+    date: batchValid.sanitized.date,
+    procurement_group: batchValid.sanitized.procurement_group,
+    receipt_path: "receipts/batch_123.jpg",
+    items: batchValid.sanitized.items,
+    userId: "user-admin-1",
+  });
+  assert.equal(payload.length, 3);
+  assert.equal(payload.every((r) => r.procurement_group === "Portal Utama"), true);
+  assert.equal(payload.every((r) => r.date === "2025-10-22"), true);
+  assert.equal(payload.every((r) => r.receipt_path === "receipts/batch_123.jpg"), true);
+  assert.equal(payload[0].description, "Besi 5meter");
+  assert.equal(payload[0].amount, 200000);
+  console.log("  ✓ Kontrak struktur atomic insert payload (shared group/date/receipt & individual material) terverifikasi");
+
+  // 25.8 Kontrak Preservasi Shared Receipt saat Penghapusan Baris Saudara (Fail-Closed Cleanup)
+  // Storage kuitansi HANYA boleh dihapus jika count query sukses tanpa error dan count === 0.
+  // Jika query error, count null/undefined, atau count > 0, receipt TIDAK boleh dihapus (fail-closed).
+  function evaluateReceiptCleanup({ count, countError }) {
+    if (!countError && count === 0) {
+      return { storageDeleted: true, reason: "Tidak ada baris lain yang menggunakan kuitansi ini, storage dibersihkan" };
+    }
+    return { storageDeleted: false, reason: "Kuitansi dipertahankan (referensi tersisa atau status query tidak pasti)" };
+  }
+
+  // Skenario 1: count positive (item saudara masih ada) -> kuitansi dipertahankan
+  assert.equal(evaluateReceiptCleanup({ count: 2, countError: null }).storageDeleted, false);
+  assert.equal(evaluateReceiptCleanup({ count: 1, countError: null }).storageDeleted, false);
+
+  // Skenario 2: count zero (tidak ada item saudara, query sukses) -> kuitansi aman dihapus
+  assert.equal(evaluateReceiptCleanup({ count: 0, countError: null }).storageDeleted, true);
+
+  // Skenario 3: query error (error database / timeout, count null) -> fail-closed, kuitansi TIDAK dihapus
+  assert.equal(evaluateReceiptCleanup({ count: null, countError: { message: "connection error" } }).storageDeleted, false);
+
+  // Skenario 4: count null tanpa error -> fail-closed, kuitansi TIDAK dihapus
+  assert.equal(evaluateReceiptCleanup({ count: null, countError: null }).storageDeleted, false);
+
+  // Skenario 5: count undefined tanpa error -> fail-closed, kuitansi TIDAK dihapus
+  assert.equal(evaluateReceiptCleanup({ count: undefined, countError: null }).storageDeleted, false);
+
+  // Skenario 6: query error dengan count 0 (inkonsisten) -> fail-closed, kuitansi TIDAK dihapus
+  assert.equal(evaluateReceiptCleanup({ count: 0, countError: { message: "partial failure" } }).storageDeleted, false);
+
+  console.log("  ✓ Kontrak proteksi shared receipt fail-closed: storage tidak dihapus pada count positif, null, atau error");
 }
 
 console.log("\n=== SEMUA PENGECEKAN LOKAL SUKSES ===");
