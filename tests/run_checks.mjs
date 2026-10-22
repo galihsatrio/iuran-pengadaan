@@ -1638,6 +1638,68 @@ console.log("\n[24] Uji Pengaturan Visibilitas Sumbangan (show_donations_on_home
   const nonAllowRes = await simulateDonationsSettingAction({ hasSession: true, isAllowlisted: false });
   assert.equal(nonAllowRes.success, false);
   console.log("  ✓ Negative check unauthenticated and non-allowlisted ditolak dengan benar");
+
+  // 24.5 Regression check: FormData parsing with hidden input fallback for checkboxes
+  // Test Case A: User checks both (hidden 'false' then checkbox 'true')
+  const fdBothTrue = new FormData();
+  fdBothTrue.append("show_expenses_on_home", "false");
+  fdBothTrue.append("show_expenses_on_home", "true");
+  fdBothTrue.append("show_donations_on_home", "false");
+  fdBothTrue.append("show_donations_on_home", "true");
+
+  const rawBothTrue = {
+    show_expenses_on_home: fdBothTrue.getAll("show_expenses_on_home").slice(-1)[0],
+    show_donations_on_home: fdBothTrue.getAll("show_donations_on_home").slice(-1)[0],
+  };
+  const valBothTrue = validateHomeVisibilitySettingsInput(rawBothTrue);
+  assert.equal(valBothTrue.valid, true);
+  assert.equal(valBothTrue.sanitized?.show_expenses_on_home, true);
+  assert.equal(valBothTrue.sanitized?.show_donations_on_home, true);
+
+  // Test Case B: User unchecks pengeluaran (only hidden 'false' sent) but checks sumbangan ('false' + 'true')
+  const fdDisableExpenses = new FormData();
+  fdDisableExpenses.append("show_expenses_on_home", "false");
+  fdDisableExpenses.append("show_donations_on_home", "false");
+  fdDisableExpenses.append("show_donations_on_home", "true");
+
+  const rawDisableExpenses = {
+    show_expenses_on_home: fdDisableExpenses.getAll("show_expenses_on_home").slice(-1)[0],
+    show_donations_on_home: fdDisableExpenses.getAll("show_donations_on_home").slice(-1)[0],
+  };
+  const valDisableExpenses = validateHomeVisibilitySettingsInput(rawDisableExpenses);
+  assert.equal(valDisableExpenses.valid, true);
+  assert.equal(valDisableExpenses.sanitized?.show_expenses_on_home, false);
+  assert.equal(valDisableExpenses.sanitized?.show_donations_on_home, true);
+
+  // Test Case C: User unchecks sumbangan (only hidden 'false' sent) but checks pengeluaran ('false' + 'true')
+  const fdDisableDonations = new FormData();
+  fdDisableDonations.append("show_expenses_on_home", "false");
+  fdDisableDonations.append("show_expenses_on_home", "true");
+  fdDisableDonations.append("show_donations_on_home", "false");
+
+  const rawDisableDonations = {
+    show_expenses_on_home: fdDisableDonations.getAll("show_expenses_on_home").slice(-1)[0],
+    show_donations_on_home: fdDisableDonations.getAll("show_donations_on_home").slice(-1)[0],
+  };
+  const valDisableDonations = validateHomeVisibilitySettingsInput(rawDisableDonations);
+  assert.equal(valDisableDonations.valid, true);
+  assert.equal(valDisableDonations.sanitized?.show_expenses_on_home, true);
+  assert.equal(valDisableDonations.sanitized?.show_donations_on_home, false);
+
+  // Test Case D: User unchecks both (both only hidden 'false' sent)
+  const fdDisableBoth = new FormData();
+  fdDisableBoth.append("show_expenses_on_home", "false");
+  fdDisableBoth.append("show_donations_on_home", "false");
+
+  const rawDisableBoth = {
+    show_expenses_on_home: fdDisableBoth.getAll("show_expenses_on_home").slice(-1)[0],
+    show_donations_on_home: fdDisableBoth.getAll("show_donations_on_home").slice(-1)[0],
+  };
+  const valDisableBoth = validateHomeVisibilitySettingsInput(rawDisableBoth);
+  assert.equal(valDisableBoth.valid, true);
+  assert.equal(valDisableBoth.sanitized?.show_expenses_on_home, false);
+  assert.equal(valDisableBoth.sanitized?.show_donations_on_home, false);
+  console.log("  ✓ Multi-checkbox form serialization regression check (independent true/false toggling) lolos");
 }
 
 console.log("\n=== SEMUA PENGECEKAN LOKAL SUKSES ===");

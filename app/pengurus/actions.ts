@@ -575,8 +575,9 @@ export async function updateHomeExpensesVisibilityAction(
     };
   }
 
+  const expensesValues = formData.getAll("show_expenses_on_home");
   const raw = {
-    show_expenses_on_home: formData.get("show_expenses_on_home"),
+    show_expenses_on_home: expensesValues.length > 0 ? expensesValues[expensesValues.length - 1] : undefined,
   };
 
   const validation = validateHomeExpensesSettingInput(raw);
@@ -674,10 +675,12 @@ export async function updateHomeVisibilitySettingsAction(
 
   const raw: { show_expenses_on_home?: unknown; show_donations_on_home?: unknown } = {};
   if (formData.has("show_expenses_on_home")) {
-    raw.show_expenses_on_home = formData.get("show_expenses_on_home");
+    const values = formData.getAll("show_expenses_on_home");
+    raw.show_expenses_on_home = values[values.length - 1];
   }
   if (formData.has("show_donations_on_home")) {
-    raw.show_donations_on_home = formData.get("show_donations_on_home");
+    const values = formData.getAll("show_donations_on_home");
+    raw.show_donations_on_home = values[values.length - 1];
   }
 
   const validation = validateHomeVisibilitySettingsInput(raw);
