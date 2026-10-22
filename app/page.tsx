@@ -5,7 +5,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { formatIDR, formatWhatsAppUrl, formatDateOnlyID } from "@/lib/format";
 import { getActiveTreasurers } from "@/lib/treasurers";
-import { getPublicExpenses, calculateCashFlow } from "@/lib/expenses";
+import { getPublicExpenses, calculateCashFlow, groupExpensesByProcurement } from "@/lib/expenses";
 import { getPaymentSettings } from "@/lib/payment-settings";
 import { getPublicGalleryItems } from "@/lib/gallery";
 import type { IuranRecord, PublicExpense, PublicGalleryItem } from "@/lib/types";
@@ -57,6 +57,7 @@ async function IuranContent() {
   }
 
   const cashFlow = calculateCashFlow(records, expenses);
+  const procurementGroups = groupExpensesByProcurement(expenses);
 
   return (
     <>
@@ -888,61 +889,98 @@ async function IuranContent() {
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
-              {expenses.map((expense, idx) => (
-                <details
-                  key={expense.id}
-                  className="group transition-colors hover:bg-slate-50/70"
-                >
-                  <summary className="cursor-pointer list-none flex items-center justify-between p-4 sm:px-5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 select-none [&::-webkit-details-marker]:hidden">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-mono text-slate-400 w-6 text-center">
-                        {idx + 1}
-                      </span>
-                      <span className="text-sm sm:text-base font-bold text-rose-600">
-                        - {formatIDR(expense.amount)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-500 group-hover:text-slate-700">
-                      <span className="hidden sm:inline">Rincian</span>
-                      <svg
-                        className="w-4 h-4 transform transition-transform group-open:rotate-180 text-slate-400 group-hover:text-slate-600"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+            <div className="divide-y divide-slate-200">
+              {procurementGroups.map((grp) => (
+                <div key={grp.isUngrouped ? "__ungrouped__" : grp.groupName} className="divide-y divide-slate-100">
+                  {/* Procurement Group Heading */}
+                  <div className="p-3.5 sm:px-5 sm:py-4 bg-slate-50/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span
+                        className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                          grp.isUngrouped ? "bg-slate-400" : "bg-emerald-500"
+                        }`}
                         aria-hidden="true"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 9l-7 7-7-7"
-                        />
-                      </svg>
-                    </div>
-                  </summary>
-
-                  <div className="px-4 sm:px-5 pb-4 pt-1 bg-slate-50/60 border-t border-slate-100">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 text-xs">
-                      <div>
-                        <span className="font-semibold text-slate-500 block uppercase text-[10px] tracking-wider">
-                          Tanggal Pengeluaran
-                        </span>
-                        <span className="text-slate-800 font-medium mt-0.5 block">
-                          {formatDateOnlyID(expense.date)}
-                        </span>
-                      </div>
-                      <div className="sm:col-span-2">
-                        <span className="font-semibold text-slate-500 block uppercase text-[10px] tracking-wider">
-                          Keterangan Alokasi
-                        </span>
-                        <p className="text-slate-800 font-medium mt-0.5 whitespace-pre-line">
-                          {expense.description}
+                      />
+                      <div className="min-w-0">
+                        <h3 className="text-sm sm:text-base font-bold text-slate-900 break-words min-w-0 leading-snug">
+                          {grp.groupName}
+                        </h3>
+                        <p className="text-[11px] text-slate-500 font-normal">
+                          {grp.items.length} item pengeluaran
                         </p>
                       </div>
                     </div>
+                    <div className="text-left sm:text-right shrink-0">
+                      <span className="text-xs sm:text-sm font-extrabold text-rose-600 whitespace-nowrap">
+                        Subtotal: {formatIDR(grp.totalAmount)}
+                      </span>
+                    </div>
                   </div>
-                </details>
+
+                  {/* Nested Expense Items under this procurement */}
+                  <div className="divide-y divide-slate-100">
+                    {grp.items.map((expense, idx) => (
+                      <details
+                        key={expense.id}
+                        className="group transition-colors hover:bg-slate-50/70"
+                      >
+                        <summary className="cursor-pointer list-none flex items-center justify-between p-3.5 sm:px-5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 select-none [&::-webkit-details-marker]:hidden">
+                          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                            <span className="text-xs font-mono text-slate-400 w-5 text-center shrink-0">
+                              {idx + 1}
+                            </span>
+                            <div className="min-w-0">
+                              <span className="text-sm font-bold text-rose-600 whitespace-nowrap">
+                                - {formatIDR(expense.amount)}
+                              </span>
+                              <p className="text-xs text-slate-700 font-medium break-words min-w-0 line-clamp-1 sm:line-clamp-none mt-0.5">
+                                {expense.description}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-slate-500 group-hover:text-slate-700 shrink-0 ml-2">
+                            <span className="hidden sm:inline">Rincian</span>
+                            <svg
+                              className="w-4 h-4 transform transition-transform group-open:rotate-180 text-slate-400 group-hover:text-slate-600"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 9l-7 7-7-7"
+                              />
+                            </svg>
+                          </div>
+                        </summary>
+
+                        <div className="px-4 sm:px-5 pb-4 pt-1 bg-slate-50/60 border-t border-slate-100">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 text-xs">
+                            <div>
+                              <span className="font-semibold text-slate-500 block uppercase text-[10px] tracking-wider">
+                                Tanggal Pengeluaran
+                              </span>
+                              <span className="text-slate-800 font-medium mt-0.5 block">
+                                {formatDateOnlyID(expense.date)}
+                              </span>
+                            </div>
+                            <div className="sm:col-span-2">
+                              <span className="font-semibold text-slate-500 block uppercase text-[10px] tracking-wider">
+                                Keterangan Alokasi
+                              </span>
+                              <p className="text-slate-800 font-medium mt-0.5 whitespace-pre-line break-words min-w-0">
+                                {expense.description}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           )}

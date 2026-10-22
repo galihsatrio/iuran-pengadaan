@@ -13,9 +13,11 @@ const initialState: ActionResult = {
 export default function EditExpenseForm({
   expense,
   signedReceiptUrl,
+  existingGroups = [],
 }: {
   expense: ExpenseRecord;
   signedReceiptUrl: string | null;
+  existingGroups?: string[];
 }) {
   const updateActionWithId = updateExpenseAction.bind(null, expense.id);
   const [state, formAction, isPending] = useActionState(
@@ -137,6 +139,50 @@ export default function EditExpenseForm({
           />
           {state.errors?.amount && (
             <p className="mt-1 text-xs text-rose-600">{state.errors.amount}</p>
+          )}
+        </div>
+
+        {/* Kelompok Pengadaan */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label
+              htmlFor="procurement_group"
+              className="block text-xs sm:text-sm font-semibold text-slate-700"
+            >
+              Kelompok Pengadaan (Opsional)
+            </label>
+            <span className="text-[11px] text-slate-500">
+              Contoh: Portal Utama, CCTV
+            </span>
+          </div>
+          <input
+            id="procurement_group"
+            name="procurement_group"
+            type="text"
+            list="procurement-group-suggestions-edit"
+            maxLength={100}
+            defaultValue={expense.procurement_group ?? ""}
+            placeholder="Pilih dari daftar atau ketik baru (kosongkan jika tanpa kelompok)"
+            disabled={isPending}
+            className={`w-full rounded-lg border px-3 py-2 text-base sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 transition-colors ${
+              state.errors?.procurement_group
+                ? "border-rose-300 bg-rose-50/50"
+                : "border-slate-300"
+            }`}
+          />
+          {existingGroups.length > 0 && (
+            <datalist id="procurement-group-suggestions-edit">
+              {existingGroups.map((grp) => (
+                <option key={grp} value={grp} />
+              ))}
+            </datalist>
+          )}
+          {state.errors?.procurement_group ? (
+            <p className="mt-1 text-xs text-rose-600">{state.errors.procurement_group}</p>
+          ) : (
+            <p className="mt-1 text-xs text-slate-500">
+              Ubah atau tetapkan kelompok hasil pengadaan untuk item ini.
+            </p>
           )}
         </div>
 

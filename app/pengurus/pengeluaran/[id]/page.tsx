@@ -2,7 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { getExpenseById, getExpenseReceiptSignedUrl } from "@/lib/expenses";
+import { getExpenseById, getExpenseReceiptSignedUrl, getAllExpenses } from "@/lib/expenses";
 import { logoutAction } from "../../actions";
 import EditExpenseForm from "../edit-form";
 
@@ -99,6 +99,15 @@ export default async function EditExpensePage({ params }: EditExpensePageProps) 
     signedReceiptUrl = await getExpenseReceiptSignedUrl(supabase, expense.receipt_path, 300);
   }
 
+  const allExpenses = await getAllExpenses(supabase);
+  const existingGroups = Array.from(
+    new Set(
+      allExpenses
+        .map((e) => (typeof e.procurement_group === "string" ? e.procurement_group.trim() : ""))
+        .filter((g): g is string => g.length > 0)
+    )
+  ).sort((a, b) => a.localeCompare(b, "id"));
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
       {/* Pengurus Navbar */}
@@ -155,7 +164,11 @@ export default async function EditExpensePage({ params }: EditExpensePageProps) 
 
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-        <EditExpenseForm expense={expense} signedReceiptUrl={signedReceiptUrl} />
+        <EditExpenseForm
+          expense={expense}
+          signedReceiptUrl={signedReceiptUrl}
+          existingGroups={existingGroups}
+        />
       </main>
     </div>
   );

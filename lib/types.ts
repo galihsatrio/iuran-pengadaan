@@ -50,6 +50,7 @@ export interface PublicExpense {
   date: string;
   description: string;
   amount: number;
+  procurement_group?: string | null;
 }
 
 export interface ExpenseRecord extends PublicExpense {
@@ -64,6 +65,7 @@ export interface ExpenseInput {
   date: string;
   description: string;
   amount: number;
+  procurement_group?: string | null;
 }
 
 export type GalleryCategory = "kegiatan" | "hasil";

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ExpenseRecord, PublicExpense } from "./types";
 
-// ponytail: Public query fetching ONLY safe disclosure fields from secure view public_expenses.
+// Public query fetching ONLY safe disclosure fields from secure view public_expenses.
 // DB contract: base table public.expenses is protected by RLS (pengurus only), while public_expenses exposes only non-sensitive columns (no receipt_path, no user IDs).
 export async function getPublicExpenses(
   client?: SupabaseClient | null
@@ -13,7 +13,7 @@ export async function getPublicExpenses(
   try {
     const { data, error } = await client
       .from("public_expenses")
-      .select("id, date, description, amount")
+      .select("id, date, description, amount, procurement_group")
       .order("date", { ascending: false })
       .order("id", { ascending: false });
 
@@ -27,7 +27,7 @@ export async function getPublicExpenses(
   return [];
 }
 
-// ponytail: Pengurus query fetching all fields including private receipt paths for administration.
+// Pengurus query fetching all fields including private receipt paths for administration.
 export async function getAllExpenses(
   client?: SupabaseClient | null
 ): Promise<ExpenseRecord[]> {
@@ -38,7 +38,7 @@ export async function getAllExpenses(
   try {
     const { data, error } = await client
       .from("expenses")
-      .select("id, date, description, amount, receipt_path, created_at, updated_at, created_by, updated_by")
+      .select("id, date, description, amount, procurement_group, receipt_path, created_at, updated_at, created_by, updated_by")
       .order("date", { ascending: false })
       .order("id", { ascending: false });
 
@@ -64,7 +64,7 @@ export async function getExpenseById(
   try {
     const { data, error } = await client
       .from("expenses")
-      .select("id, date, description, amount, receipt_path, created_at, updated_at, created_by, updated_by")
+      .select("id, date, description, amount, procurement_group, receipt_path, created_at, updated_at, created_by, updated_by")
       .eq("id", id)
       .maybeSingle();
 
@@ -78,7 +78,7 @@ export async function getExpenseById(
   return null;
 }
 
-// ponytail: Generate short-lived signed URL (default 5 min) for authorized pengurus to view private receipt without exposing public bucket access.
+// Generate short-lived signed URL (default 5 min) for authorized pengurus to view private receipt without exposing public bucket access.
 export async function getExpenseReceiptSignedUrl(
   client: SupabaseClient,
   storagePath: string,
@@ -120,4 +120,59 @@ export function calculateCashFlow(
     totalExpense,
     netBalance,
   };
+}
+
+export const UNGROUPED_PROCUREMENT_LABEL = "Belum dikelompokkan";
+
+export interface ProcurementExpenseGroup<T extends { amount: number; procurement_group?: string | null }> {
+  groupName: string;
+  isUngrouped: boolean;
+  totalAmount: number;
+  items: T[];
+}
+
+// Pure grouping utility for expenses by procurement project.
+// Groups with explicit names preserve insertion order (earliest seen); ungrouped/null always sorted last.
+export function groupExpensesByProcurement<T extends { amount: number; procurement_group?: string | null }>(
+  items: T[]
+): ProcurementExpenseGroup<T>[] {
+  const map = new Map<string | null, T[]>();
+
+  for (const item of items) {
+    const raw = typeof item.procurement_group === "string" ? item.procurement_group.trim() : "";
+    const key = raw.length > 0 ? raw : null;
+    const existing = map.get(key);
+    if (existing) {
+      existing.push(item);
+    } else {
+      map.set(key, [item]);
+    }
+  }
+
+  const groups: ProcurementExpenseGroup<T>[] = [];
+  let ungroupedGroup: ProcurementExpenseGroup<T> | null = null;
+
+  for (const [key, groupItems] of map.entries()) {
+    const isUngrouped = key === null;
+    const groupName = key !== null ? key : UNGROUPED_PROCUREMENT_LABEL;
+    const totalAmount = groupItems.reduce((sum, it) => sum + Number(it.amount || 0), 0);
+    const entry: ProcurementExpenseGroup<T> = {
+      groupName,
+      isUngrouped,
+      totalAmount,
+      items: groupItems,
+    };
+
+    if (isUngrouped) {
+      ungroupedGroup = entry;
+    } else {
+      groups.push(entry);
+    }
+  }
+
+  if (ungroupedGroup) {
+    groups.push(ungroupedGroup);
+  }
+
+  return groups;
 }

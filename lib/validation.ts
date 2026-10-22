@@ -132,6 +132,7 @@ export interface ExpenseValidationResult {
     date: string;
     description: string;
     amount: number;
+    procurement_group: string | null;
   };
 }
 
@@ -191,12 +192,14 @@ export function validateExpenseInput(data: {
   date?: unknown;
   description?: unknown;
   amount?: unknown;
+  procurement_group?: unknown;
 }): ExpenseValidationResult {
   const errors: Record<string, string> = {};
 
   const rawDate = typeof data.date === "string" ? data.date.trim() : "";
   const rawDesc = typeof data.description === "string" ? data.description.trim() : "";
   const rawAmount = typeof data.amount === "string" ? data.amount.trim() : data.amount;
+  const rawGroup = typeof data.procurement_group === "string" ? data.procurement_group.trim() : "";
 
   if (!rawDate) {
     errors.date = "Tanggal pengeluaran wajib diisi.";
@@ -230,6 +233,10 @@ export function validateExpenseInput(data: {
     errors.amount = "Nominal pengeluaran melebihi batas wajar (maksimal Rp 1.000.000.000).";
   }
 
+  if (rawGroup && rawGroup.length > 100) {
+    errors.procurement_group = "Nama kelompok pengadaan maksimal 100 karakter.";
+  }
+
   if (Object.keys(errors).length > 0) {
     return { valid: false, errors };
   }
@@ -241,6 +248,7 @@ export function validateExpenseInput(data: {
       date: rawDate,
       description: rawDesc,
       amount: numAmount,
+      procurement_group: rawGroup || null,
     },
   };
 }

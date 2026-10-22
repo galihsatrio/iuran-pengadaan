@@ -1070,6 +1070,7 @@ export async function createExpenseAction(
     date: formData.get("date"),
     description: formData.get("description"),
     amount: formData.get("amount"),
+    procurement_group: formData.get("procurement_group"),
   };
 
   const validation = validateExpenseInput(raw);
@@ -1124,6 +1125,7 @@ export async function createExpenseAction(
     date: validation.sanitized.date,
     description: validation.sanitized.description,
     amount: validation.sanitized.amount,
+    procurement_group: validation.sanitized.procurement_group,
     receipt_path: receiptStoragePath,
     created_by: user.id,
     updated_by: user.id,
@@ -1220,6 +1222,7 @@ export async function updateExpenseAction(
     date: formData.get("date"),
     description: formData.get("description"),
     amount: formData.get("amount"),
+    procurement_group: formData.get("procurement_group"),
   };
 
   const validation = validateExpenseInput(raw);
@@ -1298,6 +1301,7 @@ export async function updateExpenseAction(
       date: validation.sanitized.date,
       description: validation.sanitized.description,
       amount: validation.sanitized.amount,
+      procurement_group: validation.sanitized.procurement_group,
       receipt_path: finalReceiptPath,
       updated_at: new Date().toISOString(),
       updated_by: user.id,

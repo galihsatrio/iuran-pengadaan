@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { getAllExpenses, getExpenseReceiptSignedUrl } from "@/lib/expenses";
+import { getAllExpenses, getExpenseReceiptSignedUrl, groupExpensesByProcurement } from "@/lib/expenses";
 import { formatIDR, formatDateOnlyID } from "@/lib/format";
 import { logoutAction } from "../actions";
 import ReceiptPreview from "@/components/receipt-preview";
@@ -109,6 +109,8 @@ export default async function PengurusPengeluaranPage() {
       };
     })
   );
+
+  const groupedExpenses = groupExpensesByProcurement(expenses);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
@@ -230,9 +232,8 @@ export default async function PengurusPengeluaranPage() {
           </Link>
         </div>
 
-        {/* Expenses Table */}
-        <section aria-label="Tabel Catatan Pengeluaran" className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-          {expenses.length === 0 ? (
+        {expenses.length === 0 ? (
+          <section aria-label="Tabel Catatan Pengeluaran" className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="p-12 text-center">
               <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
                 🧾
@@ -252,96 +253,133 @@ export default async function PengurusPengeluaranPage() {
                 </Link>
               </div>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-slate-700 min-w-[620px]">
-                <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
-                  <tr>
-                    <th scope="col" className="py-3 px-4 w-12 text-center">
-                      No
-                    </th>
-                    <th scope="col" className="py-3 px-4">
-                      Tanggal
-                    </th>
-                    <th scope="col" className="py-3 px-4">
-                      Keterangan
-                    </th>
-                    <th scope="col" className="py-3 px-4 text-right">
-                      Nominal
-                    </th>
-                    <th scope="col" className="py-3 px-4 text-center">
-                      Bukti Foto
-                    </th>
-                    <th scope="col" className="py-3 px-4 text-center w-36">
-                      Aksi
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {expenses.map((item, index) => (
-                    <tr
-                      key={item.id}
-                      className="hover:bg-slate-50/70 transition-colors"
-                    >
-                      <td className="py-3 px-4 text-center text-slate-400 text-xs font-mono">
-                        {index + 1}
-                      </td>
-                      <td className="py-3 px-4 text-slate-700 font-medium whitespace-nowrap">
-                        {formatDateOnlyID(item.date)}
-                      </td>
-                      <td className="py-3 px-4 text-slate-900 font-medium">
-                        {item.description}
-                      </td>
-                      <td className="py-3 px-4 text-right font-semibold text-rose-600 whitespace-nowrap">
-                        - {formatIDR(item.amount)}
-                      </td>
-                      <td className="py-3 px-4 text-center whitespace-nowrap">
-                        {item.signedReceiptUrl ? (
-                          <ReceiptPreview
-                            signedUrl={item.signedReceiptUrl}
-                            description={`Bukti: ${item.description}`}
-                          />
-                        ) : (
-                          <span className="text-xs text-slate-400 italic">
-                            Tanpa Foto
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <Link
-                            href={`/pengurus/pengeluaran/${item.id}`}
-                            className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 min-h-[36px] text-xs font-medium rounded-md border border-slate-300 text-slate-700 hover:bg-slate-100 transition-colors"
-                          >
-                            <svg
-                              className="w-3.5 h-3.5"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                              aria-hidden="true"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+          </section>
+        ) : (
+          <div className="space-y-6">
+            {groupedExpenses.map((grp) => (
+              <section
+                key={grp.isUngrouped ? "__ungrouped__" : grp.groupName}
+                aria-label={`Pengeluaran ${grp.groupName}`}
+                className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden"
+              >
+                {/* Procurement Group Heading */}
+                <div className="p-4 sm:px-5 bg-slate-50/80 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 min-w-0">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                        grp.isUngrouped ? "bg-slate-400" : "bg-emerald-500"
+                      }`}
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0">
+                      <h3 className="text-sm sm:text-base font-bold text-slate-900 break-words min-w-0 leading-snug">
+                        {grp.groupName}
+                      </h3>
+                      <p className="text-xs text-slate-500 font-normal">
+                        {grp.items.length} item pengeluaran
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-left sm:text-right shrink-0">
+                    <span className="text-xs sm:text-sm font-extrabold text-rose-600 whitespace-nowrap">
+                      Subtotal: {formatIDR(grp.totalAmount)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Table of items for this procurement */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm text-slate-700 min-w-[560px]">
+                    <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
+                      <tr>
+                        <th scope="col" className="py-3 px-4 w-12 text-center">
+                          No
+                        </th>
+                        <th scope="col" className="py-3 px-4">
+                          Tanggal
+                        </th>
+                        <th scope="col" className="py-3 px-4">
+                          Keterangan
+                        </th>
+                        <th scope="col" className="py-3 px-4 text-right">
+                          Nominal
+                        </th>
+                        <th scope="col" className="py-3 px-4 text-center">
+                          Bukti Foto
+                        </th>
+                        <th scope="col" className="py-3 px-4 text-center w-36">
+                          Aksi
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {grp.items.map((item, index) => (
+                        <tr
+                          key={item.id}
+                          className="hover:bg-slate-50/70 transition-colors"
+                        >
+                          <td className="py-3 px-4 text-center text-slate-400 text-xs font-mono">
+                            {index + 1}
+                          </td>
+                          <td className="py-3 px-4 text-slate-700 font-medium whitespace-nowrap">
+                            {formatDateOnlyID(item.date)}
+                          </td>
+                          <td className="py-3 px-4 text-slate-900 font-medium break-words min-w-0">
+                            {item.description}
+                          </td>
+                          <td className="py-3 px-4 text-right font-semibold text-rose-600 whitespace-nowrap">
+                            - {formatIDR(item.amount)}
+                          </td>
+                          <td className="py-3 px-4 text-center whitespace-nowrap">
+                            {item.signedReceiptUrl ? (
+                              <ReceiptPreview
+                                signedUrl={item.signedReceiptUrl}
+                                description={`Bukti: ${item.description}`}
                               />
-                            </svg>
-                            <span>Ubah</span>
-                          </Link>
-                          <DeleteExpenseButton
-                            id={item.id}
-                            description={item.description}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+                            ) : (
+                              <span className="text-xs text-slate-400 italic">
+                                Tanpa Foto
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-center whitespace-nowrap">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <Link
+                                href={`/pengurus/pengeluaran/${item.id}`}
+                                className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 min-h-[36px] text-xs font-medium rounded-md border border-slate-300 text-slate-700 hover:bg-slate-100 transition-colors"
+                              >
+                                <svg
+                                  className="w-3.5 h-3.5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                  aria-hidden="true"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                                  />
+                                </svg>
+                                <span>Ubah</span>
+                              </Link>
+                              <DeleteExpenseButton
+                                id={item.id}
+                                description={item.description}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
       </main>
     </div>
   );

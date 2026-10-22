@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { getAllExpenses } from "@/lib/expenses";
 import { logoutAction } from "../../actions";
 import CreateExpenseForm from "../create-form";
 
@@ -75,6 +76,15 @@ export default async function TambahPengeluaranPage() {
     );
   }
 
+  const rawExpenses = await getAllExpenses(supabase);
+  const existingGroups = Array.from(
+    new Set(
+      rawExpenses
+        .map((e) => (typeof e.procurement_group === "string" ? e.procurement_group.trim() : ""))
+        .filter((g): g is string => g.length > 0)
+    )
+  ).sort((a, b) => a.localeCompare(b, "id"));
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
       {/* Pengurus Navbar */}
@@ -129,7 +139,7 @@ export default async function TambahPengeluaranPage() {
 
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-        <CreateExpenseForm />
+        <CreateExpenseForm existingGroups={existingGroups} />
       </main>
     </div>
   );

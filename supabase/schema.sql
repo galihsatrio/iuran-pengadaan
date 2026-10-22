@@ -258,6 +258,7 @@ create table if not exists public.expenses (
     date date not null default current_date,
     description text not null check (char_length(trim(description)) > 0 and char_length(description) <= 255),
     amount bigint not null check (amount > 0),
+    procurement_group text check (procurement_group is null or (char_length(trim(procurement_group)) > 0 and char_length(procurement_group) <= 100)),
     receipt_path text,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
@@ -266,6 +267,7 @@ create table if not exists public.expenses (
 );
 
 create index if not exists idx_expenses_date on public.expenses(date desc);
+create index if not exists idx_expenses_procurement_group on public.expenses(procurement_group);
 
 alter table public.expenses enable row level security;
 
@@ -329,7 +331,8 @@ as select
     id,
     date,
     description,
-    amount
+    amount,
+    procurement_group
 from public.expenses;
 
 grant select on public.public_expenses to anon, authenticated;

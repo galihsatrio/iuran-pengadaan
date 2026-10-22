@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import * as XLSX from "xlsx";
 import { formatDateOnlyID, normalizeWhatsAppNumber, formatWhatsAppUrl } from "../lib/format.ts";
 import { validateIuranInput, validateExpenseInput, validateGalleryInput, validateHomeExpensesSettingInput, validateHomeVisibilitySettingsInput } from "../lib/validation.ts";
-import { calculateCashFlow } from "../lib/expenses.ts";
+import { calculateCashFlow, groupExpensesByProcurement, UNGROUPED_PROCUREMENT_LABEL } from "../lib/expenses.ts";
 import {
   validateImageBuffer,
   MAX_FILE_SIZE_BYTES,
@@ -845,12 +845,35 @@ console.log("\n[14] Uji Validasi Input Pengeluaran (validateExpenseInput):");
     date: "  2025-10-19  ",
     description: "  Beli semen & cat marka jalan  ",
     amount: " 150000 ",
+    procurement_group: "  Portal Utama  ",
   });
   assert.equal(valid.valid, true);
   assert.equal(valid.sanitized?.date, "2025-10-19");
   assert.equal(valid.sanitized?.description, "Beli semen & cat marka jalan");
   assert.equal(valid.sanitized?.amount, 150000);
-  console.log("  ✓ Valid case lolos sanitasi (trimming & konversi integer)");
+  assert.equal(valid.sanitized?.procurement_group, "Portal Utama");
+  console.log("  ✓ Valid case lolos sanitasi (trimming & konversi integer & procurement_group)");
+
+  // 14.1b Input valid tanpa procurement_group (defaults to null)
+  const validNoGroup = validateExpenseInput({
+    date: "2025-10-19",
+    description: "Biaya administrasi",
+    amount: 15000,
+  });
+  assert.equal(validNoGroup.valid, true);
+  assert.equal(validNoGroup.sanitized?.procurement_group, null);
+  console.log("  ✓ Optional procurement_group defaults to null gracefully");
+
+  // 14.1c Kelompok pengadaan melebihi batas 100 karakter
+  const longGroup = validateExpenseInput({
+    date: "2025-10-19",
+    description: "Biaya",
+    amount: 15000,
+    procurement_group: "P".repeat(101),
+  });
+  assert.equal(longGroup.valid, false);
+  assert.ok(longGroup.errors.procurement_group);
+  console.log("  ✓ Pembatasan panjang procurement_group (<= 100 karakter) lolos");
 
   // 14.2 Input kosong
   const empty = validateExpenseInput({});
@@ -918,6 +941,63 @@ console.log("\n[15] Uji Perhitungan Saldo Kas Bersih (calculateCashFlow):");
   // Format tanggal Indonesia date-only
   assert.equal(formatDateOnlyID("2025-10-19"), "19 Okt 2025");
   console.log("  ✓ formatDateOnlyID memformat tanggal tanpa timezone shift");
+
+  // 15.1 Uji Pengelompokan Pengeluaran Berdasarkan Hasil Pengadaan (groupExpensesByProcurement)
+  const sampleExpenses = [
+    { id: 1, amount: 100000, procurement_group: "Portal Utama", description: "Besi pipa" },
+    { id: 2, amount: 50000, procurement_group: "CCTV", description: "Kabel UTP" },
+    { id: 3, amount: 75000, procurement_group: "Portal Utama", description: "Semen" },
+    { id: 4, amount: 25000, procurement_group: null, description: "Beli materai" },
+    { id: 5, amount: 30000, procurement_group: "   ", description: "Air minum tukang" },
+  ];
+
+  const grouped = groupExpensesByProcurement(sampleExpenses);
+  assert.equal(grouped.length, 3, "Harus ada 3 kelompok: Portal Utama, CCTV, dan Belum dikelompokkan");
+
+  // Check group 1: Portal Utama
+  assert.equal(grouped[0].groupName, "Portal Utama");
+  assert.equal(grouped[0].isUngrouped, false);
+  assert.equal(grouped[0].items.length, 2);
+  assert.equal(grouped[0].totalAmount, 175000);
+
+  // Check group 2: CCTV
+  assert.equal(grouped[1].groupName, "CCTV");
+  assert.equal(grouped[1].isUngrouped, false);
+  assert.equal(grouped[1].items.length, 1);
+  assert.equal(grouped[1].totalAmount, 50000);
+
+  // Check group 3: Belum dikelompokkan (fallback unassigned & whitespace, sorted last)
+  assert.equal(grouped[2].groupName, UNGROUPED_PROCUREMENT_LABEL);
+  assert.equal(grouped[2].isUngrouped, true);
+  assert.equal(grouped[2].items.length, 2);
+  assert.equal(grouped[2].totalAmount, 55000);
+
+  // Check overall total matches individual sum (zero data loss)
+  const totalFromGroups = grouped.reduce((sum, g) => sum + g.totalAmount, 0);
+  const totalDirect = sampleExpenses.reduce((sum, e) => sum + e.amount, 0);
+  assert.equal(totalFromGroups, totalDirect);
+  console.log("  ✓ groupExpensesByProcurement mengelompokkan item, menghitung total grup & fallback ungrouped akurat");
+
+  // 15.2 Distinguish literal 'Belum dikelompokkan' named group from null ungrouped
+  const mixedUngroupedExpenses = [
+    { id: 10, amount: 40000, procurement_group: "Belum dikelompokkan", description: "Beli cat tanda" },
+    { id: 11, amount: 60000, procurement_group: null, description: "Beli paku" },
+    { id: 12, amount: 20000, procurement_group: "Belum dikelompokkan", description: "Beli kuas" },
+    { id: 13, amount: 15000, procurement_group: "", description: "Fotokopi" },
+  ];
+
+  const mixedGrouped = groupExpensesByProcurement(mixedUngroupedExpenses);
+  assert.equal(mixedGrouped.length, 2, "Harus ada 2 kelompok: named 'Belum dikelompokkan' dan true ungrouped null");
+  assert.equal(mixedGrouped[0].groupName, "Belum dikelompokkan");
+  assert.equal(mixedGrouped[0].isUngrouped, false);
+  assert.equal(mixedGrouped[0].items.length, 2);
+  assert.equal(mixedGrouped[0].totalAmount, 60000);
+
+  assert.equal(mixedGrouped[1].groupName, UNGROUPED_PROCUREMENT_LABEL);
+  assert.equal(mixedGrouped[1].isUngrouped, true);
+  assert.equal(mixedGrouped[1].items.length, 2);
+  assert.equal(mixedGrouped[1].totalAmount, 75000);
+  console.log("  ✓ groupExpensesByProcurement membedakan grup bernama harfiah 'Belum dikelompokkan' dari ungrouped null");
 }
 
 // 16. Uji Isolasi Data Publik Pengeluaran & Negative DB Contract Checks
@@ -969,7 +1049,7 @@ console.log("\n[16] Uji Isolasi Data Publik Pengeluaran (Zero Private Receipt Le
 
   // Contract check 3: Public secure view `public_expenses` exposes ONLY public fields
   function simulatePublicExpensesViewSelect({ requestedColumns }) {
-    const allowedColumnsInView = new Set(["id", "date", "description", "amount"]);
+    const allowedColumnsInView = new Set(["id", "date", "description", "amount", "procurement_group"]);
     const hasForbiddenColumn = requestedColumns.some((col) => !allowedColumnsInView.has(col));
 
     if (hasForbiddenColumn) {
@@ -989,6 +1069,7 @@ console.log("\n[16] Uji Isolasi Data Publik Pengeluaran (Zero Private Receipt Le
           date: "2025-10-19",
           description: "Cat marka jalan",
           amount: 150000,
+          procurement_group: "Portal Utama",
         },
       ],
       error: null,
@@ -997,7 +1078,7 @@ console.log("\n[16] Uji Isolasi Data Publik Pengeluaran (Zero Private Receipt Le
 
   // Citizen query on public view
   const publicViewRes = simulatePublicExpensesViewSelect({
-    requestedColumns: ["id", "date", "description", "amount"],
+    requestedColumns: ["id", "date", "description", "amount", "procurement_group"],
   });
   assert.equal(publicViewRes.error, null);
   assert.equal(publicViewRes.data?.length, 1);
@@ -1005,7 +1086,8 @@ console.log("\n[16] Uji Isolasi Data Publik Pengeluaran (Zero Private Receipt Le
   assert.equal("receipt_path" in row, false, "receipt_path tidak boleh ada di view public_expenses");
   assert.equal("created_by" in row, false, "created_by tidak boleh ada di view public_expenses");
   assert.equal("updated_by" in row, false, "updated_by tidak boleh ada di view public_expenses");
-  console.log("  ✓ Secure view public_expenses sukses melayani id, date, description, amount");
+  assert.equal(row.procurement_group, "Portal Utama");
+  console.log("  ✓ Secure view public_expenses sukses melayani id, date, description, amount, procurement_group");
 
   // Negative check 4: Attacker attempting to request receipt_path or created_by from public_expenses view
   const attackRes = simulatePublicExpensesViewSelect({
@@ -1021,7 +1103,7 @@ console.log("\n[16] Uji Isolasi Data Publik Pengeluaran (Zero Private Receipt Le
       assert.equal(table, "public_expenses", "getPublicExpenses harus query view public_expenses");
       return {
         select: (columns) => {
-          assert.equal(columns, "id, date, description, amount");
+          assert.equal(columns, "id, date, description, amount, procurement_group");
           return {
             order: () => ({
               order: () => Promise.resolve({
@@ -1031,6 +1113,7 @@ console.log("\n[16] Uji Isolasi Data Publik Pengeluaran (Zero Private Receipt Le
                     date: "2025-10-19",
                     description: "Cat marka jalan",
                     amount: 150000,
+                    procurement_group: "Portal Utama",
                   },
                 ],
                 error: null,
@@ -1099,6 +1182,26 @@ console.log("\n[17] Negative & Auth Enforcement Contracts (Pengeluaran):");
     );
   }
   console.log("  ✓ Validasi positive safe integer ID pengeluaran lolos");
+
+  // 17.6 Negative check: Unauthenticated / non-pengurus cannot insert or update procurement_group
+  function simulateExpenseGroupWrite({ role, isAllowlistedPengurus, procurement_group }) {
+    if (role === "anon" || !isAllowlistedPengurus) {
+      return {
+        data: null,
+        error: {
+          code: "42501",
+          message: "permission denied for table expenses (RLS: Only allowlisted pengurus can write expenses)",
+        },
+      };
+    }
+    return { data: { id: 99, procurement_group }, error: null };
+  }
+
+  const anonWriteGroup = simulateExpenseGroupWrite({ role: "anon", isAllowlistedPengurus: false, procurement_group: "Hacked Group" });
+  assert.equal(anonWriteGroup.error?.code, "42501");
+  const nonAdminWriteGroup = simulateExpenseGroupWrite({ role: "authenticated", isAllowlistedPengurus: false, procurement_group: "Hacked Group" });
+  assert.equal(nonAdminWriteGroup.error?.code, "42501");
+  console.log("  ✓ Negative check: Unauthenticated atau non-pengurus tidak bisa menulis atau memanipulasi procurement_group (RLS 42501)");
 }
 
 // 18. Uji Validasi Input Galeri Foto (validateGalleryInput)
