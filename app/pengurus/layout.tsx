@@ -97,7 +97,9 @@ export default async function PengurusLayout({
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
       <PengurusHeaderChrome userEmail={user.email ?? ""} />
-      {children}
+      <div className="lg:pl-64 transition-all duration-200">
+        {children}
+      </div>
     </div>
   );
 }
