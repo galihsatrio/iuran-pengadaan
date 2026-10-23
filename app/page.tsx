@@ -1136,6 +1136,7 @@ async function PaymentInfoSection() {
                   <details
                     key={treasurer.id}
                     className="group rounded-lg border border-slate-200 bg-white shadow-2xs overflow-hidden open:border-emerald-500 open:ring-1 open:ring-emerald-500/30"
+                    open
                   >
                     <summary className="flex items-center justify-between gap-3 p-3.5 sm:p-4 cursor-pointer select-none hover:bg-slate-50/70 transition-colors list-none [&::-webkit-details-marker]:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 min-h-[48px]">
                       <div className="min-w-0 flex-1">
