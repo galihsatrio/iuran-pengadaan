@@ -4,7 +4,6 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getAllTreasurers } from "@/lib/treasurers";
 import { LogoutButton } from "../logout-button";
-import { PengurusNavLink } from "../nav-link";
 import QrisPreviewToggle from "@/components/qris-preview";
 
 export const instant = false;
@@ -93,78 +92,7 @@ export default async function MasterBendaharaPage() {
   const activeCount = treasurers.filter((t) => t.is_active).length;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800">
-      {/* Pengurus Navbar */}
-      <header className="border-b border-slate-200 bg-white sticky top-0 z-10 shadow-xs">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-2 sm:gap-4">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold text-sm shadow-xs shrink-0">
-              IP
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <h1 className="text-sm sm:text-base font-bold text-slate-900 leading-none truncate">
-                  Portal Pengurus
-                </h1>
-                <span className="hidden xs:inline-flex sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 shrink-0">
-                  Allowlisted
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5 truncate max-w-[130px] sm:max-w-xs">{user.email}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <Link
-              href="/"
-              className="text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 hover:underline min-h-[44px] inline-flex items-center px-1"
-            >
-              Tampilan Publik
-            </Link>
-            <LogoutButton />
-          </div>
-        </div>
-      </header>
-
-      {/* Navigation Subheader / Breadcrumb Tabs */}
-      <div className="border-b border-slate-200 bg-white">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex gap-4 sm:gap-6 text-xs sm:text-sm font-medium overflow-x-auto no-scrollbar whitespace-nowrap">
-          <PengurusNavLink
-            href="/pengurus"
-            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px]"
-          >
-            Data Iuran Warga
-          </PengurusNavLink>
-          <PengurusNavLink
-            href="/pengurus/master-bendahara"
-            isActive
-            className="py-3 border-b-2 border-emerald-600 text-emerald-700 font-semibold shrink-0 min-h-[44px]"
-          >
-            Master Bendahara &amp; QRIS
-          </PengurusNavLink>
-          <PengurusNavLink
-            href="/pengurus/pengeluaran"
-            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px]"
-          >
-            Pengeluaran Kas
-          </PengurusNavLink>
-          <PengurusNavLink
-            href="/pengurus/galeri"
-            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px]"
-          >
-            Galeri Kegiatan
-          </PengurusNavLink>
-          <PengurusNavLink
-            href="/pengurus/pengaturan"
-            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px]"
-          >
-            Pengaturan
-          </PengurusNavLink>
-        </div>
-      </div>
-
-      {/* Main Container */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+    <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         {/* Header & Action Button */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
           <div>
@@ -324,6 +252,5 @@ export default async function MasterBendaharaPage() {
           )}
         </section>
       </main>
-    </div>
   );
 }

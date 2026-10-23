@@ -1,6 +1,7 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
+import { usePathname } from "next/navigation";
 import { type ComponentProps, type ReactNode } from "react";
 
 function NavLinkPendingIndicator() {
@@ -23,15 +24,31 @@ interface PengurusNavLinkProps extends ComponentProps<typeof Link> {
 
 export function PengurusNavLink({
   children,
-  isActive = false,
+  href,
+  isActive,
   className = "",
   ...props
 }: PengurusNavLinkProps) {
+  const pathname = usePathname();
+  const hrefString = typeof href === "string" ? href : href.pathname || "";
+
+  const active =
+    isActive !== undefined
+      ? isActive
+      : hrefString === "/pengurus"
+      ? pathname === "/pengurus"
+      : pathname === hrefString || pathname.startsWith(`${hrefString}/`);
+
+  const activeClasses = active
+    ? "border-emerald-600 text-emerald-700 font-semibold"
+    : "border-transparent text-slate-600 hover:text-slate-900";
+
   return (
     <Link
+      href={href}
       {...props}
-      className={`inline-flex items-center transition-colors ${className}`}
-      aria-current={isActive ? "page" : undefined}
+      className={`py-3 border-b-2 shrink-0 min-h-[44px] inline-flex items-center transition-colors ${activeClasses} ${className}`}
+      aria-current={active ? "page" : undefined}
     >
       <span className="truncate">{children}</span>
       <NavLinkPendingIndicator />

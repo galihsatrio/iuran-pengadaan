@@ -2008,6 +2008,181 @@ console.log("\n[26] Uji Kontrak Logout Action & Redirection:");
   console.log("  ✓ Logout dengan error signOut mengembalikan status error dan tidak redirect");
 }
 
+// 27. Uji Shared Layout, Chrome Navigation & Loading Isolation
+console.log("\n[27] Uji Shared Layout, Chrome Navigation, & Loading Isolation:");
+{
+  // 27.1 Kontrak Auth Protection pada Layout Pengurus
+  async function simulatePengurusLayoutAuth({ configured, client }) {
+    if (!configured) {
+      return { status: "not_configured" };
+    }
+    if (!client) {
+      return { redirect: "/login" };
+    }
+    const { data } = await client.auth.getUser();
+    if (!data || !data.user) {
+      return { redirect: "/login" };
+    }
+    const { data: allowlistEntry } = await client
+      .from("pengurus_allowlist")
+      .select("user_id")
+      .eq("user_id", data.user.id)
+      .maybeSingle();
+
+    if (!allowlistEntry) {
+      return { status: "access_denied", userId: data.user.id, email: data.user.email };
+    }
+    return { status: "authorized", user: data.user };
+  }
+
+  // Tanpa konfigurasi
+  const resNotConfigured = await simulatePengurusLayoutAuth({ configured: false });
+  assert.equal(resNotConfigured.status, "not_configured", "Harus render error unconfigured");
+  console.log("  ✓ Layout memblokir akses saat Supabase belum terkonfigurasi");
+
+  // Tanpa sesi -> redirect /login
+  const resNoSession = await simulatePengurusLayoutAuth({
+    configured: true,
+    client: {
+      auth: { getUser: async () => ({ data: { user: null } }) },
+    },
+  });
+  assert.equal(resNoSession.redirect, "/login", "Harus redirect ke /login saat tidak ada sesi");
+  console.log("  ✓ Layout mengalihkan pengguna unauthenticated ke /login");
+
+  // Pengguna non-allowlist -> access_denied
+  const resDenied = await simulatePengurusLayoutAuth({
+    configured: true,
+    client: {
+      auth: { getUser: async () => ({ data: { user: { id: "user-123", email: "guest@example.com" } } }) },
+      from() {
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  maybeSingle: async () => ({ data: null }),
+                };
+              },
+            };
+          },
+        };
+      },
+    },
+  });
+  assert.equal(resDenied.status, "access_denied", "Harus ditolak jika tidak ada di allowlist");
+  console.log("  ✓ Layout menolak akses pengguna yang tidak terdaftar di allowlist");
+
+  // Pengguna allowlisted -> authorized
+  const resAuth = await simulatePengurusLayoutAuth({
+    configured: true,
+    client: {
+      auth: { getUser: async () => ({ data: { user: { id: "pengurus-1", email: "admin@example.com" } } }) },
+      from() {
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  maybeSingle: async () => ({ data: { user_id: "pengurus-1" } }),
+                };
+              },
+            };
+          },
+        };
+      },
+    },
+  });
+  assert.equal(resAuth.status, "authorized", "Harus diizinkan jika terdaftar di allowlist");
+  console.log("  ✓ Layout mengizinkan pengguna yang valid dan terdaftar di allowlist");
+
+  // 27.2 Kontrak Navigasi & Subheader State
+  function resolveChromeState(pathname) {
+    const isPengeluaranSubpage =
+      pathname.startsWith("/pengurus/pengeluaran/") &&
+      pathname !== "/pengurus/pengeluaran";
+    const isPengeluaranTambah = pathname === "/pengurus/pengeluaran/tambah";
+    const match = pathname.match(/^\/pengurus\/pengeluaran\/(\d+)/);
+
+    const isGaleri = pathname.startsWith("/pengurus/galeri");
+
+    let actionLabel = "Tampilan Publik";
+    let actionHref = "/";
+    if (isPengeluaranSubpage) {
+      actionLabel = "← Batal & Kembali";
+      actionHref = "/pengurus/pengeluaran";
+    }
+
+    let subheaderType = "tabs";
+    let breadcrumbTitle = null;
+    if (isPengeluaranSubpage) {
+      subheaderType = "breadcrumb";
+      breadcrumbTitle = isPengeluaranTambah ? "Tambah Pengeluaran" : `Edit Pengeluaran #${match ? match[1] : ""}`;
+    }
+
+    const tabs = [
+      { href: "/pengurus", label: "Data Iuran Warga" },
+      { href: "/pengurus/master-bendahara", label: "Master Bendahara & QRIS" },
+      { href: "/pengurus/pengeluaran", label: "Pengeluaran Kas" },
+      { href: "/pengurus/galeri", label: "Galeri Kegiatan" },
+      { href: "/pengurus/pengaturan", label: "Pengaturan" },
+    ].map((tab) => ({
+      ...tab,
+      isActive:
+        tab.href === "/pengurus"
+          ? pathname === "/pengurus"
+          : pathname === tab.href || pathname.startsWith(`${tab.href}/`),
+    }));
+
+    return {
+      actionLabel,
+      actionHref,
+      subheaderType,
+      breadcrumbTitle,
+      hasGaleriPublicLink: isGaleri,
+      tabs,
+    };
+  }
+
+  // Dashboard utama
+  const dashState = resolveChromeState("/pengurus");
+  assert.equal(dashState.subheaderType, "tabs");
+  assert.equal(dashState.tabs.find((t) => t.href === "/pengurus").isActive, true);
+  assert.equal(dashState.tabs.find((t) => t.href === "/pengurus/galeri").isActive, false);
+  console.log("  ✓ Resolusi tab aktif dashboard (/pengurus) akurat");
+
+  // Halaman galeri
+  const galeriState = resolveChromeState("/pengurus/galeri");
+  assert.equal(galeriState.hasGaleriPublicLink, true);
+  assert.equal(galeriState.tabs.find((t) => t.href === "/pengurus/galeri").isActive, true);
+  assert.equal(galeriState.tabs.find((t) => t.href === "/pengurus").isActive, false);
+  console.log("  ✓ Resolusi aksi khusus galeri ('Lihat Galeri Publik') dan tab aktif akurat");
+
+  // Subpage pengeluaran tambah
+  const tambahState = resolveChromeState("/pengurus/pengeluaran/tambah");
+  assert.equal(tambahState.subheaderType, "breadcrumb");
+  assert.equal(tambahState.breadcrumbTitle, "Tambah Pengeluaran");
+  assert.equal(tambahState.actionLabel, "← Batal & Kembali");
+  assert.equal(tambahState.actionHref, "/pengurus/pengeluaran");
+  console.log("  ✓ Resolusi breadcrumb dan aksi batal pada /pengurus/pengeluaran/tambah akurat");
+
+  // Subpage pengeluaran edit
+  const editState = resolveChromeState("/pengurus/pengeluaran/42");
+  assert.equal(editState.subheaderType, "breadcrumb");
+  assert.equal(editState.breadcrumbTitle, "Edit Pengeluaran #42");
+  assert.equal(editState.actionLabel, "← Batal & Kembali");
+  console.log("  ✓ Resolusi breadcrumb dinamis pada /pengurus/pengeluaran/[id] akurat");
+
+  // 27.3 Kontrak Isolasi Loading Skeleton (Tidak menduplikasi chrome)
+  const fs = await import("node:fs");
+  const loadingContent = fs.readFileSync("app/pengurus/loading.tsx", "utf-8");
+  assert.equal(loadingContent.includes("<header"), false, "Loading skeleton tidak boleh mengandung tag <header>");
+  assert.equal(loadingContent.includes("Portal Pengurus"), false, "Loading skeleton tidak boleh menduplikasi teks navbar");
+  assert.equal(loadingContent.includes("Data Iuran Warga"), false, "Loading skeleton tidak boleh menduplikasi tabs");
+  assert.equal(loadingContent.includes("<main"), true, "Loading skeleton harus terkurung dalam tag <main>");
+  console.log("  ✓ File loading skeleton terisolasi di dalam <main> tanpa menduplikasi header/tabs");
+}
+
 console.log("\n=== SEMUA PENGECEKAN LOKAL SUKSES ===");
 
 

@@ -3,7 +3,6 @@ import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getExpenseById, getExpenseReceiptSignedUrl, getAllExpenses } from "@/lib/expenses";
-import { LogoutButton } from "../../logout-button";
 import EditExpenseForm from "../edit-form";
 
 export const instant = false;
@@ -109,60 +108,12 @@ export default async function EditExpensePage({ params }: EditExpensePageProps) 
   ).sort((a, b) => a.localeCompare(b, "id"));
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800">
-      {/* Pengurus Navbar */}
-      <header className="border-b border-slate-200 bg-white sticky top-0 z-10 shadow-xs">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-2 sm:gap-4">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold text-sm shadow-xs shrink-0">
-              IP
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <h1 className="text-sm sm:text-base font-bold text-slate-900 leading-none truncate">
-                  Portal Pengurus
-                </h1>
-                <span className="hidden xs:inline-flex sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 shrink-0">
-                  Allowlisted
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5 truncate max-w-[130px] sm:max-w-xs">{user.email}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <Link
-              href="/pengurus/pengeluaran"
-              className="text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 hover:underline min-h-[44px] inline-flex items-center px-1"
-            >
-              &larr; Batal &amp; Kembali
-            </Link>
-            <LogoutButton />
-          </div>
-        </div>
-      </header>
-
-      {/* Navigation Subheader / Breadcrumb */}
-      <div className="border-b border-slate-200 bg-white">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-2 text-xs text-slate-500">
-          <Link href="/pengurus/pengeluaran" className="hover:text-emerald-700 hover:underline">
-            Pengeluaran Kas
-          </Link>
-          <span>&gt;</span>
-          <span className="text-slate-800 font-semibold truncate max-w-xs">
-            Edit Pengeluaran #{expense.id}
-          </span>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-        <EditExpenseForm
-          expense={expense}
-          signedReceiptUrl={signedReceiptUrl}
-          existingGroups={existingGroups}
-        />
-      </main>
-    </div>
+    <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+      <EditExpenseForm
+        expense={expense}
+        signedReceiptUrl={signedReceiptUrl}
+        existingGroups={existingGroups}
+      />
+    </main>
   );
 }
