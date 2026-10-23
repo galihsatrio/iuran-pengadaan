@@ -1953,6 +1953,61 @@ console.log("\n[25] Uji Validasi & Kontrak Multi-Material Pengeluaran:");
   console.log("  ✓ Kontrak proteksi shared receipt fail-closed: storage tidak dihapus pada count positif, null, atau error");
 }
 
+// 26. Uji Kontrak Alur Logout & Auth Redirection
+console.log("\n[26] Uji Kontrak Logout Action & Redirection:");
+{
+  // Simulasi implementasi logoutAction yang identik dengan app/pengurus/actions.ts
+  async function simulateLogoutAction(mockSupabase) {
+    if (!mockSupabase) {
+      return { redirect: "/login" };
+    }
+
+    const { error } = await mockSupabase.auth.signOut();
+    if (error) {
+      return {
+        success: false,
+        message: error.message || "Gagal keluar sesi akun.",
+      };
+    }
+
+    return { redirect: "/login" };
+  }
+
+  // 26.1 Tanpa Supabase client (unauthenticated / unconfigured) -> redirect /login
+  const noClientResult = await simulateLogoutAction(null);
+  assert.equal(noClientResult.redirect, "/login", "Harus redirect ke /login saat client tidak ada");
+  console.log("  ✓ Logout tanpa client supabase mengarah ke /login");
+
+  // 26.2 Sukses signOut -> redirect /login
+  let signOutCalled = false;
+  const mockSuccessSupabase = {
+    auth: {
+      async signOut() {
+        signOutCalled = true;
+        return { error: null };
+      },
+    },
+  };
+  const successResult = await simulateLogoutAction(mockSuccessSupabase);
+  assert.equal(signOutCalled, true, "signOut harus dipanggil");
+  assert.equal(successResult.redirect, "/login", "Harus redirect ke /login setelah signOut sukses");
+  console.log("  ✓ Logout dengan signOut sukses mengarah ke /login");
+
+  // 26.3 Gagal signOut -> return ActionResult error tanpa redirect
+  const mockFailSupabase = {
+    auth: {
+      async signOut() {
+        return { error: { message: "Network error saat sign out" } };
+      },
+    },
+  };
+  const failResult = await simulateLogoutAction(mockFailSupabase);
+  assert.equal(failResult.success, false, "Status success harus false saat signOut gagal");
+  assert.equal(failResult.message, "Network error saat sign out", "Pesan error diteruskan");
+  assert.equal(failResult.redirect, undefined, "Tidak boleh redirect saat signOut gagal");
+  console.log("  ✓ Logout dengan error signOut mengembalikan status error dan tidak redirect");
+}
+
 console.log("\n=== SEMUA PENGECEKAN LOKAL SUKSES ===");
 
 

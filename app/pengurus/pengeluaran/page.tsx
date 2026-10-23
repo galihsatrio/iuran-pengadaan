@@ -4,7 +4,8 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getAllExpenses, getExpenseReceiptSignedUrl, groupExpensesByProcurement } from "@/lib/expenses";
 import { formatIDR, formatDateOnlyID } from "@/lib/format";
-import { logoutAction } from "../actions";
+import { LogoutButton } from "../logout-button";
+import { PengurusNavLink } from "../nav-link";
 import ReceiptPreview from "@/components/receipt-preview";
 import DeleteExpenseButton from "./delete-expense-button";
 
@@ -79,14 +80,7 @@ export default async function PengurusPengeluaranPage() {
             >
               Lihat Rekap Publik
             </Link>
-            <form action={logoutAction}>
-              <button
-                type="submit"
-                className="w-full sm:w-auto px-4 py-2 bg-rose-600 text-white rounded-lg text-sm font-medium hover:bg-rose-700"
-              >
-                Keluar
-              </button>
-            </form>
+            <LogoutButton variant="card" />
           </div>
         </div>
       </div>
@@ -141,14 +135,7 @@ export default async function PengurusPengeluaranPage() {
             >
               Tampilan Publik
             </Link>
-            <form action={logoutAction} className="inline-flex items-center">
-              <button
-                type="submit"
-                className="px-2.5 sm:px-3 py-1.5 min-h-[36px] sm:min-h-0 text-xs sm:text-sm font-medium rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors inline-flex items-center cursor-pointer"
-              >
-                Keluar
-              </button>
-            </form>
+            <LogoutButton />
           </div>
         </div>
       </header>
@@ -156,36 +143,37 @@ export default async function PengurusPengeluaranPage() {
       {/* Navigation Subheader / Breadcrumb Tabs */}
       <div className="border-b border-slate-200 bg-white">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex gap-4 sm:gap-6 text-xs sm:text-sm font-medium overflow-x-auto no-scrollbar whitespace-nowrap">
-          <Link
+          <PengurusNavLink
             href="/pengurus"
-            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px] flex items-center"
+            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px]"
           >
             Data Iuran Warga
-          </Link>
-          <Link
+          </PengurusNavLink>
+          <PengurusNavLink
             href="/pengurus/master-bendahara"
-            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px] flex items-center"
+            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px]"
           >
             Master Bendahara &amp; QRIS
-          </Link>
-          <Link
+          </PengurusNavLink>
+          <PengurusNavLink
             href="/pengurus/pengeluaran"
-            className="py-3 border-b-2 border-emerald-600 text-emerald-700 font-semibold shrink-0 min-h-[44px] flex items-center"
+            isActive
+            className="py-3 border-b-2 border-emerald-600 text-emerald-700 font-semibold shrink-0 min-h-[44px]"
           >
             Pengeluaran Kas
-          </Link>
-          <Link
+          </PengurusNavLink>
+          <PengurusNavLink
             href="/pengurus/galeri"
-            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px] flex items-center"
+            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px]"
           >
             Galeri Kegiatan
-          </Link>
-          <Link
+          </PengurusNavLink>
+          <PengurusNavLink
             href="/pengurus/pengaturan"
-            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px] flex items-center"
+            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px]"
           >
             Pengaturan
-          </Link>
+          </PengurusNavLink>
         </div>
       </div>
 

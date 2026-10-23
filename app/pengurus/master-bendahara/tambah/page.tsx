@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { logoutAction } from "../../actions";
+import { LogoutButton } from "../../logout-button";
+import { PengurusNavLink } from "../../nav-link";
 import CreateTreasurerForm from "../create-form";
 
 export const instant = false;
@@ -71,14 +72,7 @@ export default async function TambahBendaharaPage() {
             >
               Lihat Rekap Publik
             </Link>
-            <form action={logoutAction}>
-              <button
-                type="submit"
-                className="w-full sm:w-auto px-4 py-2 bg-rose-600 text-white rounded-lg text-sm font-medium hover:bg-rose-700"
-              >
-                Keluar
-              </button>
-            </form>
+            <LogoutButton variant="card" />
           </div>
         </div>
       </div>
@@ -114,14 +108,7 @@ export default async function TambahBendaharaPage() {
             >
               Tampilan Publik
             </Link>
-            <form action={logoutAction} className="inline-flex items-center">
-              <button
-                type="submit"
-                className="px-2.5 sm:px-3 py-1.5 min-h-[36px] sm:min-h-0 text-xs sm:text-sm font-medium rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors inline-flex items-center cursor-pointer"
-              >
-                Keluar
-              </button>
-            </form>
+            <LogoutButton />
           </div>
         </div>
       </header>
@@ -129,18 +116,19 @@ export default async function TambahBendaharaPage() {
       {/* Navigation Subheader / Breadcrumb Tabs */}
       <div className="border-b border-slate-200 bg-white">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex gap-4 sm:gap-6 text-xs sm:text-sm font-medium overflow-x-auto no-scrollbar whitespace-nowrap">
-          <Link
+          <PengurusNavLink
             href="/pengurus"
-            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px] flex items-center"
+            className="py-3 border-b-2 border-transparent text-slate-600 hover:text-slate-900 shrink-0 min-h-[44px]"
           >
             Data Iuran Warga
-          </Link>
-          <Link
+          </PengurusNavLink>
+          <PengurusNavLink
             href="/pengurus/master-bendahara"
-            className="py-3 border-b-2 border-emerald-600 text-emerald-700 font-semibold shrink-0 min-h-[44px] flex items-center"
+            isActive
+            className="py-3 border-b-2 border-emerald-600 text-emerald-700 font-semibold shrink-0 min-h-[44px]"
           >
             Master Bendahara &amp; QRIS
-          </Link>
+          </PengurusNavLink>
         </div>
       </div>
 

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getExpenseById, getExpenseReceiptSignedUrl, getAllExpenses } from "@/lib/expenses";
-import { logoutAction } from "../../actions";
+import { LogoutButton } from "../../logout-button";
 import EditExpenseForm from "../edit-form";
 
 export const instant = false;
@@ -137,14 +137,7 @@ export default async function EditExpensePage({ params }: EditExpensePageProps) 
             >
               &larr; Batal &amp; Kembali
             </Link>
-            <form action={logoutAction} className="inline-flex items-center">
-              <button
-                type="submit"
-                className="px-2.5 sm:px-3 py-1.5 min-h-[36px] sm:min-h-0 text-xs sm:text-sm font-medium rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors inline-flex items-center cursor-pointer"
-              >
-                Keluar
-              </button>
-            </form>
+            <LogoutButton />
           </div>
         </div>
       </header>

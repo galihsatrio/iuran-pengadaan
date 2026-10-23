@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { randomUUID } from "node:crypto";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -1517,11 +1518,21 @@ export async function deleteExpenseAction(id: number): Promise<ActionResult> {
   };
 }
 
-export async function logoutAction() {
+export async function logoutAction(): Promise<ActionResult> {
   const supabase = await getServerSupabase();
-  if (supabase) {
-    await supabase.auth.signOut();
+  if (!supabase) {
+    redirect("/login");
   }
+
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    return {
+      success: false,
+      message: error.message || "Gagal keluar sesi akun.",
+    };
+  }
+
+  redirect("/login");
 }
 
 // ponytail: Upload and store gallery documentation photos for kerja bakti and its results. Enforces allowlist, magic bytes, and max 5MB.
