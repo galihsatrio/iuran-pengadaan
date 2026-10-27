@@ -281,6 +281,115 @@ export async function deleteIuranRecord(id: number): Promise<ActionResult> {
   };
 }
 
+// ponytail: Toggle key pickup status with graceful fallback if column is not yet migrated in remote database.
+export async function toggleKeyCollectionAction(
+  id: number,
+  collected: boolean
+): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) {
+    return {
+      success: false,
+      message: "Konfigurasi Supabase belum terpasang di server.",
+    };
+  }
+
+  const safeId = typeof id === "number" ? id : Number(id);
+  if (!Number.isSafeInteger(safeId) || safeId <= 0) {
+    return {
+      success: false,
+      message: "ID iuran tidak valid.",
+    };
+  }
+
+  const supabase = await getServerSupabase();
+  if (!supabase) {
+    return {
+      success: false,
+      message: "Koneksi database tidak tersedia.",
+    };
+  }
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return {
+      success: false,
+      message: "Sesi login Anda telah berakhir. Silakan masuk kembali.",
+    };
+  }
+
+  const payload = {
+    is_key_collected: Boolean(collected),
+    key_collected_at: collected ? new Date().toISOString() : null,
+  };
+
+  const { data: updatedRecord, error: updateError } = await supabase
+    .from("iuran")
+    .update(payload)
+    .eq("id", safeId)
+    .select("id, is_key_collected, nama_blok, nomor_blok")
+    .maybeSingle();
+
+  if (updateError) {
+    if (updateError.code === "42501" || updateError.message.includes("policy")) {
+      return {
+        success: false,
+        message:
+          "Akses Ditolak: Akun Anda tidak memiliki izin untuk mengubah status kunci (RLS Policy).",
+      };
+    }
+
+    // Graceful fallback if column doesn't exist yet in remote DB
+    if (
+      updateError.code === "42703" ||
+      updateError.message.toLowerCase().includes("column") ||
+      updateError.message.toLowerCase().includes("does not exist")
+    ) {
+      return {
+        success: false,
+        message:
+          "Kolom status kunci belum tersedia di database. Jalankan migrasi terbaru terlebih dahulu.",
+      };
+    }
+
+    return {
+      success: false,
+      message: "Gagal memperbarui status kunci: " + updateError.message,
+    };
+  }
+
+  if (!updatedRecord) {
+    return {
+      success: false,
+      message:
+        "Data iuran tidak ditemukan atau akun Anda tidak memiliki izin memperbarui data ini.",
+    };
+  }
+
+  // Synchronize status across all records for the same resident house
+  if (updatedRecord.nama_blok && updatedRecord.nomor_blok) {
+    await supabase
+      .from("iuran")
+      .update(payload)
+      .eq("nama_blok", updatedRecord.nama_blok)
+      .eq("nomor_blok", updatedRecord.nomor_blok);
+  }
+
+  revalidatePath("/pengurus");
+  revalidatePath("/pengurus/pengambilan-kunci");
+  revalidatePath("/");
+
+  return {
+    success: true,
+    message: collected
+      ? "Status kunci berhasil diubah menjadi: Sudah Ambil."
+      : "Status kunci berhasil diubah menjadi: Belum Ambil.",
+  };
+}
+
 export async function uploadQrisAction(
   prevState: ActionResult | null,
   formData: FormData

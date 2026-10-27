@@ -17,6 +17,8 @@ create table if not exists public.iuran (
     nomor_blok text not null check (char_length(trim(nomor_blok)) > 0 and char_length(nomor_blok) <= 20),
     nama_kepala_keluarga text not null check (char_length(trim(nama_kepala_keluarga)) > 0 and char_length(nama_kepala_keluarga) <= 100),
     amount bigint not null check (amount > 0),
+    is_key_collected boolean not null default false,
+    key_collected_at timestamptz,
     created_by uuid references auth.users(id) default auth.uid()
 );
 

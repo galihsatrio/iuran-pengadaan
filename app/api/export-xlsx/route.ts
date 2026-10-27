@@ -28,25 +28,46 @@ export async function GET() {
   }
 
   // Public read only required fields; no private/internal fields exposed
+  let records: IuranRecord[] = [];
   const { data, error } = await supabase
     .from("iuran")
-    .select("id, nama_blok, nomor_blok, nama_kepala_keluarga, amount, created_at")
+    .select("id, nama_blok, nomor_blok, nama_kepala_keluarga, amount, is_key_collected, created_at")
     .order("created_at", { ascending: false });
 
-  if (error) {
+  if (error && (error.code === "42703" || error.message.includes("column"))) {
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from("iuran")
+      .select("id, nama_blok, nomor_blok, nama_kepala_keluarga, amount, created_at")
+      .order("created_at", { ascending: false });
+
+    if (fallbackError) {
+      return NextResponse.json(
+        { error: "Gagal mengambil data iuran: " + fallbackError.message },
+        { status: 500 }
+      );
+    }
+    records = (fallbackData as IuranRecord[]) || [];
+  } else if (error) {
     return NextResponse.json(
       { error: "Gagal mengambil data iuran: " + error.message },
       { status: 500 }
     );
+  } else {
+    records = (data as IuranRecord[]) || [];
   }
 
-  const records = (data as IuranRecord[]) || [];
   const residentTotals = calculateResidentTotals(records);
 
   const rows = records.map((item, index) => {
     const rKey = getResidentKey(item);
     const cumulative = residentTotals.get(rKey) || Number(item.amount || 0);
     const duesStatus = calculateResidentDuesStatus(cumulative);
+    const isEligible = cumulative >= 75000;
+    const statusKunci = !isEligible
+      ? "Belum Berhak"
+      : item.is_key_collected
+      ? "Sudah Ambil"
+      : "Belum Ambil";
 
     return {
       No: index + 1,
@@ -57,6 +78,7 @@ export async function GET() {
       Tahap: duesStatus.stageLabel,
       "Target (Rp)": duesStatus.target,
       "Sisa Tagihan (Rp)": duesStatus.outstandingBalance,
+      "Status Kunci": statusKunci,
       "Waktu Pencatatan": formatDateID(item.created_at),
     };
   });
@@ -73,6 +95,7 @@ export async function GET() {
     Tahap: "",
     "Target (Rp)": 0,
     "Sisa Tagihan (Rp)": 0,
+    "Status Kunci": "",
     "Waktu Pencatatan": "",
   });
 
@@ -88,6 +111,7 @@ export async function GET() {
     { wch: 22 },
     { wch: 16 },
     { wch: 18 },
+    { wch: 16 },
     { wch: 24 },
   ];
 

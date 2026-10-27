@@ -98,10 +98,22 @@ export default async function PengurusPage() {
   }
 
   // Ambil daftar iuran
-  const { data: iuranData } = await supabase
+  let iuranData: IuranRecord[] | null = null;
+  const { data: fullData, error: fullError } = await supabase
     .from("iuran")
-    .select("id, nama_blok, nomor_blok, nama_kepala_keluarga, amount, created_at")
+    .select("id, nama_blok, nomor_blok, nama_kepala_keluarga, amount, is_key_collected, key_collected_at, created_at")
     .order("created_at", { ascending: false });
+
+  if (fullError && (fullError.code === "42703" || fullError.message.includes("column"))) {
+    // Fallback if is_key_collected column does not exist yet in remote DB
+    const { data: fallbackData } = await supabase
+      .from("iuran")
+      .select("id, nama_blok, nomor_blok, nama_kepala_keluarga, amount, created_at")
+      .order("created_at", { ascending: false });
+    iuranData = fallbackData as IuranRecord[] | null;
+  } else {
+    iuranData = fullData as IuranRecord[] | null;
+  }
 
   const records = (iuranData as IuranRecord[]) || [];
   const totalAmount = records.reduce(
@@ -189,7 +201,7 @@ export default async function PengurusPage() {
                         </div>
 
                         <div className="overflow-x-auto">
-                          <table className="w-full text-left text-sm text-slate-700 min-w-[680px]">
+                          <table className="w-full text-left text-sm text-slate-700 min-w-[760px]">
                             <thead className="bg-slate-50/50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
                               <tr>
                                 <th scope="col" className="py-2.5 px-4 w-12 text-center">
@@ -223,6 +235,7 @@ export default async function PengurusPage() {
                                 const rKey = getResidentKey(item);
                                 const cumulative = residentTotals.get(rKey) || Number(item.amount || 0);
                                 const duesStatus = calculateResidentDuesStatus(cumulative);
+                                const isEligibleForKey = cumulative >= 75000;
 
                                 return (
                                   <tr
@@ -236,7 +249,21 @@ export default async function PengurusPage() {
                                       {item.nomor_blok}
                                     </td>
                                     <td className="py-2.5 px-4 text-slate-800 font-medium">
-                                      {item.nama_kepala_keluarga || "-"}
+                                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                        <span>{item.nama_kepala_keluarga || "-"}</span>
+                                        {isEligibleForKey && (
+                                          <Link
+                                            href="/pengurus/pengambilan-kunci"
+                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0 w-fit hover:bg-emerald-200 transition-colors"
+                                            title="Kelola pengambilan kunci di menu Pengambilan Kunci"
+                                          >
+                                            <svg className="w-3 h-3 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                                            </svg>
+                                            Bisa Ambil Kunci
+                                          </Link>
+                                        )}
+                                      </div>
                                     </td>
                                     <td className="py-2.5 px-4 text-right font-semibold text-emerald-700">
                                       {formatIDR(item.amount)}
@@ -271,7 +298,10 @@ export default async function PengurusPage() {
                                       )}
                                     </td>
                                     <td className="py-2.5 px-4 text-center">
-                                      <IuranRowActions record={item} />
+                                      <IuranRowActions
+                                        record={item}
+                                        isEligibleForKey={isEligibleForKey}
+                                      />
                                     </td>
                                   </tr>
                                 );

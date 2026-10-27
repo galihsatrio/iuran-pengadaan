@@ -5,6 +5,8 @@ export interface IuranRecord {
   nama_kepala_keluarga: string;
   amount: number;
   created_at: string;
+  is_key_collected?: boolean;
+  key_collected_at?: string | null;
 }
 
 export interface IuranInput {

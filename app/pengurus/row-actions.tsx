@@ -1,18 +1,27 @@
 "use client";
 
 import { useState, useTransition, useActionState, useEffect, useRef } from "react";
-import { updateIuranRecord, deleteIuranRecord } from "./actions";
+import { updateIuranRecord, deleteIuranRecord, toggleKeyCollectionAction } from "./actions";
 import { formatIDR } from "@/lib/format";
 import type { IuranRecord } from "@/lib/types";
 
-export default function IuranRowActions({ record }: { record: IuranRecord }) {
+export default function IuranRowActions({
+  record,
+  isEligibleForKey = false,
+}: {
+  record: IuranRecord;
+  isEligibleForKey?: boolean;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [menuCoords, setMenuCoords] = useState<{ top: number; left: number } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editFormKey, setEditFormKey] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isPendingDelete, startDeleteTransition] = useTransition();
+  const [isPendingKeyToggle, startKeyTransition] = useTransition();
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const isCollected = Boolean(record.is_key_collected);
 
   const editDialogRef = useRef<HTMLDialogElement>(null);
   const deleteDialogRef = useRef<HTMLDialogElement>(null);
@@ -24,8 +33,8 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
     const trigger = triggerButtonRef.current;
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
-    const menuWidth = 128; // w-32
-    const menuHeight = 80;
+    const menuWidth = 160; // w-40
+    const menuHeight = isEligibleForKey ? 120 : 80;
     const padding = 8;
 
     let left = rect.right - menuWidth;
@@ -180,8 +189,39 @@ export default function IuranRowActions({ record }: { record: IuranRecord }) {
               top: `${menuCoords.top}px`,
               left: `${menuCoords.left}px`,
             }}
-            className="w-32 rounded-lg bg-white border border-slate-200 shadow-lg py-1 z-50 focus:outline-hidden text-left"
+            className="w-40 rounded-lg bg-white border border-slate-200 shadow-lg py-1 z-50 focus:outline-hidden text-left"
           >
+            {isEligibleForKey && (
+              <button
+                type="button"
+                disabled={isPendingKeyToggle}
+                onClick={() => {
+                  setIsOpen(false);
+                  startKeyTransition(async () => {
+                    await toggleKeyCollectionAction(record.id, !isCollected);
+                  });
+                }}
+                className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 cursor-pointer border-b border-slate-100"
+              >
+                <svg
+                  className="w-3.5 h-3.5 text-emerald-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                  />
+                </svg>
+                <span>
+                  {isCollected ? "Batal Ambil Kunci" : "Tandai Ambil Kunci"}
+                </span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
