@@ -37,15 +37,26 @@ async function IuranContent() {
       showDonations = settings.show_donations_on_home ?? true;
 
       // Public warga query: only requested public fields, no secret/auth fields
-      const { data, error } = await supabase
+      const { data: fullData, error: fullError } = await supabase
         .from("iuran")
-        .select("id, nama_blok, nomor_blok, nama_kepala_keluarga, amount, created_at")
+        .select("id, nama_blok, nomor_blok, nama_kepala_keluarga, amount, is_key_collected, created_at")
         .order("created_at", { ascending: false });
 
-      if (error) {
-        errorMessage = error.message;
-      } else if (data) {
-        records = data as IuranRecord[];
+      if (fullError && (fullError.code === "42703" || fullError.message.includes("column"))) {
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from("iuran")
+          .select("id, nama_blok, nomor_blok, nama_kepala_keluarga, amount, created_at")
+          .order("created_at", { ascending: false });
+
+        if (fallbackError) {
+          errorMessage = fallbackError.message;
+        } else if (fallbackData) {
+          records = fallbackData as IuranRecord[];
+        }
+      } else if (fullError) {
+        errorMessage = fullError.message;
+      } else if (fullData) {
+        records = fullData as IuranRecord[];
       }
 
       // Public expenses query: only safe disclosure fields (no receipt path or user IDs)
@@ -58,6 +69,27 @@ async function IuranContent() {
 
   const cashFlow = calculateCashFlow(records, expenses);
   const procurementGroups = groupExpensesByProcurement(expenses);
+
+  const residentTotals = calculateResidentTotals(records);
+  const residentKeyCollectedMap = new Map<string, boolean>();
+  for (const r of records) {
+    if (r.is_key_collected) {
+      residentKeyCollectedMap.set(getResidentKey(r), true);
+    }
+  }
+
+  let totalEligibleHouseholds = 0;
+  let totalCollectedHouseholds = 0;
+  for (const [rKey, cumulative] of residentTotals.entries()) {
+    if (cumulative >= 75000) {
+      totalEligibleHouseholds += 1;
+      if (residentKeyCollectedMap.get(rKey)) {
+        totalCollectedHouseholds += 1;
+      }
+    } else if (residentKeyCollectedMap.get(rKey)) {
+      totalCollectedHouseholds += 1;
+    }
+  }
 
   return (
     <>
@@ -194,6 +226,59 @@ async function IuranContent() {
           </div>
         </div>
       </section>
+
+      {/* Key Pickup Information Alert Box */}
+      <div
+        role="region"
+        aria-label="Informasi Pengambilan Kunci Portal"
+        className="mb-8 rounded-2xl border border-sky-200/80 bg-linear-to-r from-sky-50/70 via-white to-emerald-50/50 p-4 sm:p-5 shadow-xs"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-start gap-3 min-w-0">
+            <div
+              className="w-10 h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center shrink-0 ring-1 ring-sky-200/70 mt-0.5"
+              aria-hidden="true"
+            >
+              <svg className="w-5 h-5 text-sky-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-100 text-sky-800 ring-1 ring-sky-200/60">
+                  Info Pengambilan Kunci
+                </span>
+                <span className="text-xs text-slate-500 hidden sm:inline">&bull; Minimal Rp 75.000</span>
+              </div>
+              <h3 className="text-sm sm:text-base font-bold text-slate-900 mt-1">
+                Kunci Fisik Portal Masuk Warga
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 mt-0.5 leading-relaxed">
+                Warga dengan pembayaran minimal <strong className="font-semibold text-slate-800">Rp 75.000</strong> berhak mengambil kunci ke pengurus.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 pt-2 sm:pt-0 border-t border-sky-100 sm:border-t-0">
+            <div className="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-white border border-slate-200/90 shadow-2xs">
+              <div className="text-left sm:text-right">
+                <span className="text-[10px] uppercase font-semibold text-slate-400 block tracking-wider leading-none">
+                  Status Penyerahan
+                </span>
+                <span className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5 block">
+                  <span className="text-emerald-700">{totalCollectedHouseholds}</span> kunci sudah diserahkan /{" "}
+                  <span className="text-slate-700">{totalEligibleHouseholds}</span> warga berhak
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Table & Actions */}
       <section className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
@@ -368,6 +453,8 @@ async function IuranContent() {
                           const rKey = getResidentKey(item);
                           const cumulative = residentTotals.get(rKey) || Number(item.amount || 0);
                           const duesStatus = calculateResidentDuesStatus(cumulative);
+                          const isEligible = cumulative >= 75000;
+                          const isCollected = Boolean(residentKeyCollectedMap.get(rKey) || item.is_key_collected);
 
                           return (
                             <div
@@ -397,6 +484,42 @@ async function IuranContent() {
                                   <div className="font-bold text-slate-900 text-xs sm:text-sm leading-snug mt-0.5 break-words">
                                     {item.nama_kepala_keluarga || "-"}
                                   </div>
+                                  {isEligible && (
+                                    <div className="mt-1.5 flex flex-wrap gap-1">
+                                      {isCollected ? (
+                                        <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/90 whitespace-nowrap leading-tight">
+                                          <svg
+                                            className="w-3 h-3 text-emerald-600 shrink-0"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                            aria-hidden="true"
+                                          >
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                          </svg>
+                                          <span>Kunci Sudah Diambil</span>
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/90 whitespace-nowrap leading-tight">
+                                          <svg
+                                            className="w-3 h-3 text-amber-600 shrink-0"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                            aria-hidden="true"
+                                          >
+                                            <path
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                              strokeWidth={2}
+                                              d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                                            />
+                                          </svg>
+                                          <span>Bisa Ambil Kunci</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
 
                                 {/* Section 2 (Middle): subtle vertical divider, Iuran and full green amount */}
@@ -476,7 +599,7 @@ async function IuranContent() {
                         </div>
 
                         <div className="overflow-x-auto">
-                          <table className="w-full text-left text-sm text-slate-700 min-w-[620px]">
+                          <table className="w-full text-left text-sm text-slate-700 min-w-[700px]">
                           <thead className="bg-slate-50/50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
                             <tr>
                               <th scope="col" className="py-2.5 px-4 w-12 text-center">
@@ -494,6 +617,9 @@ async function IuranContent() {
                               <th scope="col" className="py-2.5 px-4 text-center">
                                 Tahap
                               </th>
+                              <th scope="col" className="py-2.5 px-4 text-center">
+                                Kunci Portal
+                              </th>
                               <th scope="col" className="py-2.5 px-4 text-right">
                                 Target
                               </th>
@@ -507,6 +633,8 @@ async function IuranContent() {
                               const rKey = getResidentKey(item);
                               const cumulative = residentTotals.get(rKey) || Number(item.amount || 0);
                               const duesStatus = calculateResidentDuesStatus(cumulative);
+                              const isEligible = cumulative >= 75000;
+                              const isCollected = Boolean(residentKeyCollectedMap.get(rKey) || item.is_key_collected);
 
                               return (
                                 <tr
@@ -540,6 +668,44 @@ async function IuranContent() {
                                       {duesStatus.stageLabel}
                                     </span>
                                   </td>
+                                  <td className="py-2.5 px-4 text-center whitespace-nowrap">
+                                    {isEligible ? (
+                                      isCollected ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                          <svg
+                                            className="w-3.5 h-3.5 text-emerald-600 shrink-0"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                            aria-hidden="true"
+                                          >
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                          </svg>
+                                          <span>Kunci Sudah Diambil</span>
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                                          <svg
+                                            className="w-3.5 h-3.5 text-amber-600 shrink-0"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                            aria-hidden="true"
+                                          >
+                                            <path
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                              strokeWidth={2}
+                                              d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                                            />
+                                          </svg>
+                                          <span>Bisa Ambil Kunci</span>
+                                        </span>
+                                      )
+                                    ) : (
+                                      <span className="text-slate-400 text-xs font-mono">-</span>
+                                    )}
+                                  </td>
                                   <td className="py-2.5 px-4 text-right text-xs text-slate-600 font-medium">
                                     {formatIDR(duesStatus.target)}
                                   </td>
@@ -566,7 +732,7 @@ async function IuranContent() {
                               <td className="py-2.5 px-4 text-right text-emerald-700 font-bold">
                                 {formatIDR(blockTotal)}
                               </td>
-                              <td colSpan={3}></td>
+                              <td colSpan={4}></td>
                             </tr>
                           </tfoot>
                         </table>
