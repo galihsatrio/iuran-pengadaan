@@ -200,32 +200,32 @@ export default async function PengurusPage() {
                           </div>
                         </div>
 
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-sm text-slate-700 min-w-[760px]">
-                            <thead className="bg-slate-50/50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
+                        <div className="overflow-x-auto rounded-b-lg">
+                          <table className="w-full text-left text-sm text-slate-700 min-w-[920px]">
+                            <thead className="bg-slate-50/75 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
                               <tr>
-                                <th scope="col" className="py-2.5 px-4 w-12 text-center">
+                                <th scope="col" className="py-3 px-3.5 w-12 text-center">
                                   No
                                 </th>
-                                <th scope="col" className="py-2.5 px-4">
+                                <th scope="col" className="py-3 px-3.5 w-28 whitespace-nowrap">
                                   Nomor Rumah
                                 </th>
-                                <th scope="col" className="py-2.5 px-4">
+                                <th scope="col" className="py-3 px-4 min-w-[200px]">
                                   Nama Kepala Keluarga
                                 </th>
-                                <th scope="col" className="py-2.5 px-4 text-right">
+                                <th scope="col" className="py-3 px-3.5 text-right whitespace-nowrap">
                                   Jumlah Iuran
                                 </th>
-                                <th scope="col" className="py-2.5 px-4 text-center">
+                                <th scope="col" className="py-3 px-3.5 text-center w-24 whitespace-nowrap">
                                   Tahap
                                 </th>
-                                <th scope="col" className="py-2.5 px-4 text-right">
+                                <th scope="col" className="py-3 px-3.5 text-right whitespace-nowrap">
                                   Target
                                 </th>
-                                <th scope="col" className="py-2.5 px-4 text-right">
+                                <th scope="col" className="py-3 px-3.5 text-right whitespace-nowrap">
                                   Sisa Tagihan
                                 </th>
-                                <th scope="col" className="py-2.5 px-4 text-center w-20">
+                                <th scope="col" className="py-3 px-4 text-center w-24 whitespace-nowrap">
                                   Opsi
                                 </th>
                               </tr>
@@ -242,33 +242,35 @@ export default async function PengurusPage() {
                                     key={item.id}
                                     className="hover:bg-slate-50/70 transition-colors"
                                   >
-                                    <td className="py-2.5 px-4 text-center text-slate-400 text-xs font-mono">
+                                    <td className="py-3 px-3.5 text-center text-slate-400 text-xs font-mono">
                                       {index + 1}
                                     </td>
-                                    <td className="py-2.5 px-4 text-slate-600 font-medium">
+                                    <td className="py-3 px-3.5 text-slate-600 font-medium whitespace-nowrap">
                                       {item.nomor_blok}
                                     </td>
-                                    <td className="py-2.5 px-4 text-slate-800 font-medium">
-                                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                        <span>{item.nama_kepala_keluarga || "-"}</span>
+                                    <td className="py-3 px-4 text-slate-800 font-medium">
+                                      <div>
+                                        <div className="leading-snug">{item.nama_kepala_keluarga || "-"}</div>
                                         {isEligibleForKey && (
-                                          <Link
-                                            href="/pengurus/pengambilan-kunci"
-                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0 w-fit hover:bg-emerald-200 transition-colors"
-                                            title="Kelola pengambilan kunci di menu Pengambilan Kunci"
-                                          >
-                                            <svg className="w-3 h-3 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                                            </svg>
-                                            Bisa Ambil Kunci
-                                          </Link>
+                                          <div className="mt-1">
+                                            <Link
+                                              href="/pengurus/pengambilan-kunci"
+                                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0 w-fit hover:bg-emerald-200 transition-colors"
+                                              title="Kelola pengambilan kunci di menu Pengambilan Kunci"
+                                            >
+                                              <svg className="w-3 h-3 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                                              </svg>
+                                              Bisa Ambil Kunci
+                                            </Link>
+                                          </div>
                                         )}
                                       </div>
                                     </td>
-                                    <td className="py-2.5 px-4 text-right font-semibold text-emerald-700">
+                                    <td className="py-3 px-3.5 text-right font-semibold text-emerald-700 tabular-nums whitespace-nowrap">
                                       {formatIDR(item.amount)}
                                     </td>
-                                    <td className="py-2.5 px-4 text-center whitespace-nowrap">
+                                    <td className="py-3 px-3.5 text-center whitespace-nowrap">
                                       <span
                                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
                                           duesStatus.stage === 3
@@ -283,10 +285,10 @@ export default async function PengurusPage() {
                                         {duesStatus.stageLabel}
                                       </span>
                                     </td>
-                                    <td className="py-2.5 px-4 text-right text-xs text-slate-600 font-medium">
+                                    <td className="py-3 px-3.5 text-right text-xs text-slate-600 font-medium tabular-nums whitespace-nowrap">
                                       {formatIDR(duesStatus.target)}
                                     </td>
-                                    <td className="py-2.5 px-4 text-right font-medium text-xs whitespace-nowrap">
+                                    <td className="py-3 px-3.5 text-right font-medium text-xs whitespace-nowrap tabular-nums">
                                       {duesStatus.outstandingBalance > 0 ? (
                                         <span className="text-amber-700 font-semibold">
                                           {formatIDR(duesStatus.outstandingBalance)}
@@ -297,7 +299,7 @@ export default async function PengurusPage() {
                                         </span>
                                       )}
                                     </td>
-                                    <td className="py-2.5 px-4 text-center">
+                                    <td className="py-3 px-4 text-center">
                                       <IuranRowActions
                                         record={item}
                                         isEligibleForKey={isEligibleForKey}
@@ -309,10 +311,10 @@ export default async function PengurusPage() {
                             </tbody>
                             <tfoot className="bg-slate-50/70 font-semibold text-xs border-t border-slate-200 text-slate-700">
                               <tr>
-                                <td colSpan={3} className="py-2.5 px-4 text-right">
+                                <td colSpan={3} className="py-3 px-4 text-right">
                                   Subtotal Blok {namaBlok}:
                                 </td>
-                                <td className="py-2.5 px-4 text-right text-emerald-700 font-bold">
+                                <td className="py-3 px-3.5 text-right text-emerald-700 font-bold tabular-nums whitespace-nowrap">
                                   {formatIDR(blockTotal)}
                                 </td>
                                 <td colSpan={4}></td>
