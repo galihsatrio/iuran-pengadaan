@@ -16,24 +16,25 @@ interface NotaBelanjaListProps {
 
 export default function NotaBelanjaList({ notes }: NotaBelanjaListProps) {
   const [selectedNote, setSelectedNote] = useState<NoteWithPhoto | null>(null);
+  const [fullscreenPhoto, setFullscreenPhoto] = useState<{ url: string; title: string } | null>(null);
 
   // Lock body scroll saat modal detail terbuka
   useEffect(() => {
-    document.body.style.overflow = selectedNote ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [selectedNote]);
+    document.body.style.overflow = (selectedNote || fullscreenPhoto) ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [selectedNote, fullscreenPhoto]);
 
-  // Tutup modal pada tombol Escape
   useEffect(() => {
-    if (!selectedNote) return;
+    if (!selectedNote && !fullscreenPhoto) return;
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSelectedNote(null);
+      if (e.key === "Escape") {
+        if (fullscreenPhoto) { setFullscreenPhoto(null); return; }
+        setSelectedNote(null);
+      }
     };
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [selectedNote]);
+  }, [selectedNote, fullscreenPhoto]);
 
   if (notes.length === 0) {
     return null;
@@ -184,13 +185,24 @@ export default function NotaBelanjaList({ notes }: NotaBelanjaListProps) {
             <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
               {/* Foto Nota */}
               {selectedNote.signedPhotoUrl ? (
-                <div className="rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+                <div className="rounded-lg overflow-hidden border border-slate-200 bg-slate-50 relative group">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={selectedNote.signedPhotoUrl}
                     alt={`Foto nota: ${selectedNote.title}`}
-                    className="w-full object-contain max-h-64"
+                    className="w-full object-contain max-h-64 cursor-zoom-in"
+                    onClick={() => setFullscreenPhoto({ url: selectedNote.signedPhotoUrl!, title: selectedNote.title })}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setFullscreenPhoto({ url: selectedNote.signedPhotoUrl!, title: selectedNote.title })}
+                    className="absolute bottom-2 right-2 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-900/60 text-white text-[11px] font-medium hover:bg-slate-900/80 transition-colors cursor-pointer"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+                    </svg>
+                    Lihat Penuh
+                  </button>
                 </div>
               ) : (
                 <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 py-6 text-center">
@@ -263,6 +275,48 @@ export default function NotaBelanjaList({ notes }: NotaBelanjaListProps) {
                 Tutup
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* ── Lightbox Foto Penuh ── */}
+      {fullscreenPhoto && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Foto penuh: ${fullscreenPhoto.title}`}
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/90 backdrop-blur-sm p-4"
+          onClick={() => setFullscreenPhoto(null)}
+        >
+          {/* Tombol tutup */}
+          <button
+            type="button"
+            onClick={() => setFullscreenPhoto(null)}
+            aria-label="Tutup foto"
+            className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors cursor-pointer"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          {/* Foto */}
+          <div
+            className="relative max-w-4xl w-full max-h-[90vh] flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={fullscreenPhoto.url}
+              alt={`Foto nota: ${fullscreenPhoto.title}`}
+              className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+            />
+          </div>
+
+          {/* Label bawah */}
+          <div className="absolute bottom-4 left-0 right-0 text-center">
+            <span className="inline-block px-3 py-1 rounded-full bg-slate-900/60 text-white text-xs font-medium">
+              {fullscreenPhoto.title} · Klik di luar untuk tutup
+            </span>
           </div>
         </div>
       )}

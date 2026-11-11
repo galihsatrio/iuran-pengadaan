@@ -4,8 +4,8 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getShoppingNoteById, getShoppingNoteSignedUrl } from "@/lib/shopping-notes";
 import { formatIDR, formatDateOnlyID } from "@/lib/format";
-import ReceiptPreview from "@/components/receipt-preview";
 import DeleteNoteButton from "../delete-note-button";
+import NotePhotoViewer from "./photo-viewer";
 
 export const instant = false;
 
@@ -165,19 +165,7 @@ export default async function ShoppingNoteDetailPage({ params }: ShoppingNoteDet
 
           {/* Photo Section if exists */}
           {signedPhotoUrl && (
-            <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-3 rounded-lg border">
-              <div className="flex items-center gap-2 text-xs font-medium text-slate-700">
-                <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <span>Foto Struk / Nota Terlampir</span>
-              </div>
-              <ReceiptPreview
-                signedUrl={signedPhotoUrl}
-                description={`Foto Nota: ${note.title}`}
-                buttonLabel="Lihat Foto Struk / Nota"
-              />
-            </div>
+            <NotePhotoViewer signedUrl={signedPhotoUrl} title={note.title} />
           )}
         </div>
 
