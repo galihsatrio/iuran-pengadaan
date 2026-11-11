@@ -2217,3 +2217,262 @@ export async function deleteShoppingNoteAction(id: number): Promise<ActionResult
   };
 }
 
+// ponytail: Update shopping note record, replace/remove photo, and replace all items.
+export async function updateShoppingNoteAction(
+  id: number,
+  prevState: ActionResult | null,
+  formData: FormData
+): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) {
+    return {
+      success: false,
+      message: "Konfigurasi Supabase belum terpasang di server.",
+    };
+  }
+
+  const safeId = typeof id === "number" ? id : Number(id);
+  if (!Number.isSafeInteger(safeId) || safeId <= 0) {
+    return {
+      success: false,
+      message: "ID nota belanja tidak valid.",
+    };
+  }
+
+  const supabase = await getServerSupabase();
+  if (!supabase) {
+    return {
+      success: false,
+      message: "Koneksi database tidak tersedia.",
+    };
+  }
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return {
+      success: false,
+      message: "Sesi login Anda telah berakhir. Silakan masuk kembali.",
+    };
+  }
+
+  const { data: allowlisted } = await supabase
+    .from("pengurus_allowlist")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!allowlisted) {
+    return {
+      success: false,
+      message: "Akses Ditolak: Hanya pengurus terdaftar yang berhak memperbarui nota belanja.",
+    };
+  }
+
+  const rawTitle = formData.get("title");
+  const rawDate = formData.get("date");
+
+  const itemNames = formData.getAll("item_name");
+  const itemPrices = formData.getAll("item_price");
+
+  const items: Array<{ item_name: unknown; item_price: unknown }> = [];
+  const maxLen = Math.max(itemNames.length, itemPrices.length);
+  for (let i = 0; i < maxLen; i++) {
+    items.push({
+      item_name: itemNames[i],
+      item_price: itemPrices[i],
+    });
+  }
+
+  const validation = validateShoppingNoteInput({
+    title: rawTitle,
+    date: rawDate,
+    items,
+  });
+
+  if (!validation.valid || !validation.sanitized) {
+    return {
+      success: false,
+      message: "Data nota belanja tidak valid. Periksa isian formulir.",
+      errors: validation.errors,
+    };
+  }
+
+  const sanitized = validation.sanitized;
+
+  // Fetch current record to get existing photo_path
+  const { data: currentNote, error: fetchError } = await supabase
+    .from("shopping_notes")
+    .select("id, photo_path")
+    .eq("id", safeId)
+    .maybeSingle();
+
+  if (fetchError || !currentNote) {
+    return {
+      success: false,
+      message: "Data nota belanja tidak ditemukan.",
+    };
+  }
+
+  const removePhoto = formData.get("remove_photo") === "true" || formData.get("remove_photo") === "1";
+  let finalPhotoPath: string | null = currentNote.photo_path;
+  const photoFile = formData.get("photo");
+  const hasNewPhoto = Boolean(photoFile && photoFile instanceof File && photoFile.size > 0);
+  const oldPhotoToDelete: string | null = (removePhoto || hasNewPhoto) ? currentNote.photo_path : null;
+
+  if (removePhoto) {
+    finalPhotoPath = null;
+  }
+
+  let newUploadedPath: string | null = null;
+  if (hasNewPhoto && photoFile instanceof File) {
+    if (photoFile.size > MAX_GALLERY_FILE_SIZE_BYTES) {
+      return {
+        success: false,
+        message: "Ukuran berkas foto nota melebihi batas maksimal 5MB.",
+      };
+    }
+
+    const arrayBuffer = await photoFile.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const imgValidation = validateImageBuffer(buffer, MAX_GALLERY_FILE_SIZE_BYTES);
+    if (!imgValidation.valid || !imgValidation.extension || !imgValidation.mimeType) {
+      return {
+        success: false,
+        message: imgValidation.error || "Berkas foto nota tidak valid (harus PNG, JPG, atau WEBP).",
+      };
+    }
+
+    const uniqueId = randomUUID().replace(/-/g, "").slice(0, 12);
+    const newStoragePath = `notes/${Date.now()}_${uniqueId}.${imgValidation.extension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(SHOPPING_NOTE_STORAGE_BUCKET)
+      .upload(newStoragePath, buffer, {
+        contentType: imgValidation.mimeType,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      return {
+        success: false,
+        message: "Gagal mengunggah foto nota pengganti: " + uploadError.message,
+      };
+    }
+
+    finalPhotoPath = newStoragePath;
+    newUploadedPath = newStoragePath;
+  }
+
+  // Update shopping note record
+  const { data: updatedRecord, error: updateError } = await supabase
+    .from("shopping_notes")
+    .update({
+      title: sanitized.title,
+      date: sanitized.date,
+      total_amount: sanitized.total_amount,
+      photo_path: finalPhotoPath,
+      updated_at: new Date().toISOString(),
+      updated_by: user.id,
+    })
+    .eq("id", safeId)
+    .select("id")
+    .maybeSingle();
+
+  if (updateError || !updatedRecord) {
+    if (newUploadedPath) {
+      try {
+        await supabase.storage.from(SHOPPING_NOTE_STORAGE_BUCKET).remove([newUploadedPath]);
+      } catch {
+        // Ignore
+      }
+    }
+
+    if (updateError?.code === "42501" || updateError?.message.includes("policy")) {
+      return {
+        success: false,
+        message: "Akses Ditolak: Akun Anda tidak memiliki izin untuk memperbarui nota belanja (RLS Policy).",
+      };
+    }
+
+    return {
+      success: false,
+      message: "Gagal memperbarui nota belanja: " + (updateError?.message || "Data tidak ditemukan"),
+    };
+  }
+
+  // Delete old items
+  const { error: deleteItemsError } = await supabase
+    .from("shopping_note_items")
+    .delete()
+    .eq("note_id", safeId);
+
+  if (deleteItemsError) {
+    if (deleteItemsError.code === "42501" || deleteItemsError.message.includes("policy")) {
+      return {
+        success: false,
+        message: "Akses Ditolak: Akun Anda tidak memiliki izin untuk memperbarui rincian barang (RLS Policy).",
+      };
+    }
+
+    return {
+      success: false,
+      message: "Gagal memperbarui rincian barang: " + deleteItemsError.message,
+    };
+  }
+
+  // Insert new items
+  const itemsToInsert = sanitized.items.map((item, index) => ({
+    note_id: safeId,
+    item_name: item.item_name,
+    item_price: item.item_price,
+    sort_order: index,
+  }));
+
+  const { error: insertItemsError } = await supabase
+    .from("shopping_note_items")
+    .insert(itemsToInsert);
+
+  if (insertItemsError) {
+    if (insertItemsError.code === "42501" || insertItemsError.message.includes("policy")) {
+      return {
+        success: false,
+        message: "Akses Ditolak: Akun Anda tidak memiliki izin untuk menyimpan rincian barang baru (RLS Policy).",
+      };
+    }
+
+    return {
+      success: false,
+      message: "Gagal menyimpan rincian barang baru: " + insertItemsError.message,
+    };
+  }
+
+  // Clean up old photo if replaced or removed
+  if (oldPhotoToDelete && oldPhotoToDelete !== finalPhotoPath) {
+    try {
+      const { count, error: countError } = await supabase
+        .from("shopping_notes")
+        .select("id", { count: "exact", head: true })
+        .eq("photo_path", oldPhotoToDelete);
+
+      if (!countError && count === 0) {
+        await supabase.storage.from(SHOPPING_NOTE_STORAGE_BUCKET).remove([oldPhotoToDelete]);
+      }
+    } catch {
+      // Ignore cleanup error
+    }
+  }
+
+  revalidatePath("/");
+  revalidatePath("/pengurus");
+  revalidatePath("/pengurus/nota-belanja");
+  revalidatePath(`/pengurus/nota-belanja/${safeId}`);
+
+  return {
+    success: true,
+    message: "Nota belanja berhasil diperbarui.",
+  };
+}
+

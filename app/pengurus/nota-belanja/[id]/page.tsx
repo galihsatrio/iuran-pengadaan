@@ -118,6 +118,26 @@ export default async function ShoppingNoteDetailPage({ params }: ShoppingNoteDet
         </Link>
 
         <div className="flex items-center gap-2">
+          <Link
+            href={`/pengurus/nota-belanja/${note.id}/edit`}
+            className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 min-h-[36px] text-xs font-medium rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 transition-colors shadow-xs"
+          >
+            <svg
+              className="w-3.5 h-3.5 text-slate-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+              />
+            </svg>
+            <span>Ubah</span>
+          </Link>
           <DeleteNoteButton id={note.id} title={note.title} />
         </div>
       </div>
