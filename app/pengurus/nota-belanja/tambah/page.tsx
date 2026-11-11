@@ -89,7 +89,7 @@ export default async function TambahNotaBelanjaPage() {
         </Link>
       </div>
 
-      <CreateShoppingNoteForm />
+      <CreateShoppingNoteForm key={Date.now()} />
     </main>
   );
 }
