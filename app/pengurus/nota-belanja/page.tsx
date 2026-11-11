@@ -3,9 +3,9 @@ import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getAllShoppingNotesWithItems, getShoppingNoteSignedUrl } from "@/lib/shopping-notes";
-import { formatIDR, formatDateOnlyID } from "@/lib/format";
+import { formatIDR } from "@/lib/format";
 import { LogoutButton } from "../logout-button";
-import NoteActionsMenu from "./note-actions-menu";
+import NotaBelanjaList from "./nota-belanja-list";
 
 export const instant = false;
 
@@ -163,63 +163,7 @@ export default async function NotaBelanjaPage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs sm:text-sm">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold text-xs uppercase tracking-wider">
-                  <th scope="col" className="px-4 py-3">Tanggal</th>
-                  <th scope="col" className="px-4 py-3">Judul Nota</th>
-                  <th scope="col" className="px-4 py-3 text-right">Total Nominal</th>
-                  <th scope="col" className="px-4 py-3 text-center">Foto Struk</th>
-                  <th scope="col" className="px-4 py-3 text-center w-14">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {notes.map((note) => (
-                  <tr key={note.id} className="hover:bg-slate-50/75 transition-colors">
-                    <td className="px-4 py-3 font-mono text-slate-600 whitespace-nowrap">
-                      {formatDateOnlyID(note.date)}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      <Link
-                        href={`/pengurus/nota-belanja/${note.id}`}
-                        className="hover:text-emerald-700 hover:underline transition-colors font-semibold"
-                      >
-                        {note.title}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 font-mono font-semibold text-slate-900 text-right whitespace-nowrap">
-                      {formatIDR(note.total_amount)}
-                    </td>
-                    <td className="px-4 py-3 text-center whitespace-nowrap">
-                      {note.photo_path ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <svg className="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          Ada Foto
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 text-xs italic">Tanpa foto</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center whitespace-nowrap">
-                      <NoteActionsMenu
-                      id={note.id}
-                      title={note.title}
-                      date={note.date}
-                      totalAmount={note.total_amount}
-                      items={note.items ?? []}
-                      signedPhotoUrl={note.signedPhotoUrl ?? null}
-                    />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <NotaBelanjaList notes={notes} />
       )}
     </main>
   );
