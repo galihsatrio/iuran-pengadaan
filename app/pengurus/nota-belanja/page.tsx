@@ -3,7 +3,6 @@ import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getAllShoppingNotesWithItems, getShoppingNoteSignedUrl } from "@/lib/shopping-notes";
-import { getAllExpenses } from "@/lib/expenses";
 import { formatIDR } from "@/lib/format";
 import { LogoutButton } from "../logout-button";
 import NotaBelanjaList from "./nota-belanja-list";
@@ -85,10 +84,9 @@ export default async function NotaBelanjaPage() {
     );
   }
 
-  const [rawNotes, { data: iuranRows }, expenseRows] = await Promise.all([
+  const [rawNotes, { data: iuranRows }] = await Promise.all([
     getAllShoppingNotesWithItems(supabase),
     supabase.from("iuran").select("amount"),
-    getAllExpenses(supabase),
   ]);
 
   // Generate signed URLs paralel untuk semua nota yang punya foto
@@ -103,8 +101,7 @@ export default async function NotaBelanjaPage() {
 
   const totalAllNotes = notes.reduce((sum, n) => sum + Number(n.total_amount || 0), 0);
   const totalIncome = (iuranRows ?? []).reduce((sum, r) => sum + Number(r.amount || 0), 0);
-  const totalExpense = expenseRows.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  const totalNetBalance = totalIncome - totalExpense;
+  const totalNetBalance = totalIncome - totalAllNotes;
 
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
@@ -137,21 +134,9 @@ export default async function NotaBelanjaPage() {
         </div>
       </div>
 
-      {/* Summary Total Card */}
-      {notes.length > 0 && (
-        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="text-xs sm:text-sm text-slate-600 font-medium">
-            Total Akumulasi Pembelanjaan ({notes.length} nota tercatat)
-          </div>
-          <div className="text-lg sm:text-xl font-bold text-slate-900">
-            {formatIDR(totalAllNotes)}
-          </div>
-        </div>
-      )}
-
-      {/* Saldo Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      {/* Summary Cards: Saldo Masuk, Total Nota Belanja, Saldo Bersih */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between gap-2">
           <div className="text-xs sm:text-sm text-slate-600 font-medium">
             Total Saldo Masuk
           </div>
@@ -159,7 +144,15 @@ export default async function NotaBelanjaPage() {
             {formatIDR(totalIncome)}
           </div>
         </div>
-        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between gap-2">
+          <div className="text-xs sm:text-sm text-slate-600 font-medium">
+            Total Nota Belanja ({notes.length} nota)
+          </div>
+          <div className="text-lg sm:text-xl font-bold text-slate-900">
+            {formatIDR(totalAllNotes)}
+          </div>
+        </div>
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between gap-2">
           <div className="text-xs sm:text-sm text-slate-600 font-medium">
             Total Saldo Bersih
           </div>
