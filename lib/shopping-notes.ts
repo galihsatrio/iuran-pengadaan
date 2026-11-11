@@ -28,6 +28,47 @@ export async function getAllShoppingNotes(
   return [];
 }
 
+// Fetch all shopping notes with their items in 2 queries (avoid N+1)
+export async function getAllShoppingNotesWithItems(
+  client?: SupabaseClient | null
+): Promise<ShoppingNote[]> {
+  if (!client) return [];
+
+  try {
+    const { data: notes, error: notesError } = await client
+      .from("shopping_notes")
+      .select("id, title, date, photo_path, total_amount, created_at")
+      .order("date", { ascending: false })
+      .order("id", { ascending: false });
+
+    if (notesError || !notes || notes.length === 0) return notes ? (notes as ShoppingNote[]) : [];
+
+    const noteIds = notes.map((n: { id: number }) => n.id);
+    const { data: items, error: itemsError } = await client
+      .from("shopping_note_items")
+      .select("id, note_id, item_name, item_price, sort_order")
+      .in("note_id", noteIds)
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true });
+
+    const itemsByNoteId = new Map<number, ShoppingNoteItem[]>();
+    if (!itemsError && items) {
+      for (const item of items as ShoppingNoteItem[]) {
+        const existing = itemsByNoteId.get(item.note_id);
+        if (existing) existing.push(item);
+        else itemsByNoteId.set(item.note_id, [item]);
+      }
+    }
+
+    return (notes as ShoppingNote[]).map((n) => ({
+      ...n,
+      items: itemsByNoteId.get(n.id) ?? [],
+    }));
+  } catch {
+    return [];
+  }
+}
+
 // Fetch single shopping note with its items
 export async function getShoppingNoteById(
   id: number,

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { getAllShoppingNotes } from "@/lib/shopping-notes";
+import { getAllShoppingNotesWithItems, getShoppingNoteSignedUrl } from "@/lib/shopping-notes";
 import { formatIDR, formatDateOnlyID } from "@/lib/format";
 import { LogoutButton } from "../logout-button";
 import NoteActionsMenu from "./note-actions-menu";
@@ -84,7 +84,18 @@ export default async function NotaBelanjaPage() {
     );
   }
 
-  const notes = await getAllShoppingNotes(supabase);
+  const rawNotes = await getAllShoppingNotesWithItems(supabase);
+
+  // Generate signed URLs paralel untuk semua nota yang punya foto
+  const notes = await Promise.all(
+    rawNotes.map(async (note) => ({
+      ...note,
+      signedPhotoUrl: note.photo_path
+        ? await getShoppingNoteSignedUrl(supabase, note.photo_path, 300)
+        : null,
+    }))
+  );
+
   const totalAllNotes = notes.reduce((sum, n) => sum + Number(n.total_amount || 0), 0);
 
   return (
@@ -194,7 +205,14 @@ export default async function NotaBelanjaPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-center whitespace-nowrap">
-                      <NoteActionsMenu id={note.id} title={note.title} />
+                      <NoteActionsMenu
+                      id={note.id}
+                      title={note.title}
+                      date={note.date}
+                      totalAmount={note.total_amount}
+                      items={note.items ?? []}
+                      signedPhotoUrl={note.signedPhotoUrl ?? null}
+                    />
                     </td>
                   </tr>
                 ))}
