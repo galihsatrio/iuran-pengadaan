@@ -103,6 +103,25 @@ export interface GalleryInput {
   caption?: string | null;
 }
 
+export interface ShoppingNote {
+  id: number;
+  title: string;
+  date: string;
+  photo_path: string | null;
+  total_amount: number;
+  created_at: string;
+  items?: ShoppingNoteItem[];
+}
+
+export interface ShoppingNoteItem {
+  id: number;
+  note_id: number;
+  item_name: string;
+  item_price: number;
+  sort_order: number;
+}
+
+
 
 
 

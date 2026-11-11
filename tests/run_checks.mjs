@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import * as XLSX from "xlsx";
 import { formatDateOnlyID, normalizeWhatsAppNumber, formatWhatsAppUrl } from "../lib/format.ts";
-import { validateIuranInput, validateExpenseInput, validateBatchExpenseInput, validateGalleryInput, validateHomeExpensesSettingInput, validateHomeVisibilitySettingsInput } from "../lib/validation.ts";
+import { validateIuranInput, validateExpenseInput, validateBatchExpenseInput, validateGalleryInput, validateHomeExpensesSettingInput, validateHomeVisibilitySettingsInput, validateShoppingNoteInput } from "../lib/validation.ts";
 import { calculateCashFlow, groupExpensesByProcurement, UNGROUPED_PROCUREMENT_LABEL } from "../lib/expenses.ts";
+import { getAllShoppingNotes, getShoppingNoteById } from "../lib/shopping-notes.ts";
 import {
   validateImageBuffer,
   MAX_FILE_SIZE_BYTES,
@@ -2183,6 +2184,115 @@ console.log("\n[27] Uji Shared Layout, Chrome Navigation, & Loading Isolation:")
   console.log("  ✓ File loading skeleton terisolasi di dalam <main> tanpa menduplikasi header/tabs");
 }
 
+// 28. Uji Validasi & Kontrak Nota Belanja (lib/validation & lib/shopping-notes)
+console.log("\n[28] Uji Validasi & Kontrak Nota Belanja (Shopping Notes):");
+{
+  // Valid case
+  const validNote = validateShoppingNoteInput({
+    title: "  Belanja Cat & Kuas Portal  ",
+    date: "2025-10-24",
+    items: [
+      { item_name: "  Cat Besi Hitam 5kg  ", item_price: "150000" },
+      { item_name: "  Kuas 2 inch (3 pcs)  ", item_price: 45000 },
+      { item_name: "  Thinner A 1 liter  ", item_price: 35000 },
+    ],
+  });
+  assert.equal(validNote.valid, true, "Input nota belanja valid harus diterima");
+  assert.equal(validNote.sanitized?.title, "Belanja Cat & Kuas Portal", "Judul harus di-trim");
+  assert.equal(validNote.sanitized?.date, "2025-10-24", "Tanggal harus sesuai");
+  assert.equal(validNote.sanitized?.items.length, 3, "Jumlah item harus 3");
+  assert.equal(validNote.sanitized?.items[0].item_name, "Cat Besi Hitam 5kg", "Nama item harus di-trim");
+  assert.equal(validNote.sanitized?.items[0].item_price, 150000, "Harga item harus berupa integer");
+  assert.equal(validNote.sanitized?.items[0].sort_order, 0, "sort_order harus 0");
+  assert.equal(validNote.sanitized?.total_amount, 230000, "Total amount harus akumulasi akurat (150k + 45k + 35k = 230k)");
+  console.log("  ✓ Valid shopping note lolos sanitasi & perhitungan total akurat");
+
+  // Invalid title
+  const emptyTitle = validateShoppingNoteInput({
+    title: "   ",
+    date: "2025-10-24",
+    items: [{ item_name: "Barang A", item_price: 10000 }],
+  });
+  assert.equal(emptyTitle.valid, false);
+  assert.ok(emptyTitle.errors.title, "Judul kosong harus ditolak");
+
+  const longTitle = validateShoppingNoteInput({
+    title: "T".repeat(101),
+    date: "2025-10-24",
+    items: [{ item_name: "Barang A", item_price: 10000 }],
+  });
+  assert.equal(longTitle.valid, false);
+  assert.ok(longTitle.errors.title, "Judul > 100 karakter harus ditolak");
+  console.log("  ✓ Validasi judul nota (wajib & max 100 char) lolos");
+
+  // Invalid date
+  const invalidDate = validateShoppingNoteInput({
+    title: "Belanja",
+    date: "2025-02-30",
+    items: [{ item_name: "Barang A", item_price: 10000 }],
+  });
+  assert.equal(invalidDate.valid, false);
+  assert.ok(invalidDate.errors.date, "Tanggal tidak valid harus ditolak");
+  console.log("  ✓ Validasi tanggal nota (ISO & kalender valid) lolos");
+
+  // Empty items
+  const noItems = validateShoppingNoteInput({
+    title: "Belanja",
+    date: "2025-10-24",
+    items: [],
+  });
+  assert.equal(noItems.valid, false);
+  assert.ok(noItems.errors.items, "Items kosong harus ditolak");
+  console.log("  ✓ Validasi minimal 1 item belanja lolos");
+
+  // Invalid item fields
+  const invalidItem = validateShoppingNoteInput({
+    title: "Belanja",
+    date: "2025-10-24",
+    items: [
+      { item_name: "", item_price: 10000 },
+      { item_name: "Barang B", item_price: -500 },
+      { item_name: "Barang C", item_price: 100.5 },
+    ],
+  });
+  assert.equal(invalidItem.valid, false);
+  assert.ok(invalidItem.errors["items.0.item_name"], "Nama barang kosong harus ditolak");
+  assert.ok(invalidItem.errors["items.1.item_price"], "Harga negatif harus ditolak");
+  assert.ok(invalidItem.errors["items.2.item_price"], "Harga pecahan/desimal harus ditolak");
+  console.log("  ✓ Validasi per-item (nama wajib & harga integer >= 0) lolos");
+
+  // Mock data functions
+  const mockNotesData = [
+    { id: 1, title: "Nota 1", date: "2025-10-24", photo_path: null, total_amount: 100000, created_at: "2025-10-24T00:00:00Z" },
+  ];
+  const mockClient = {
+    from: (table) => ({
+      select: () => ({
+        order: () => ({
+          order: () => Promise.resolve({ data: mockNotesData, error: null }),
+        }),
+        eq: () => ({
+          maybeSingle: () => Promise.resolve({ data: mockNotesData[0], error: null }),
+          order: () => ({
+            order: () => Promise.resolve({ data: [{ id: 10, note_id: 1, item_name: "Semen", item_price: 100000, sort_order: 0 }], error: null }),
+          }),
+        }),
+      }),
+    }),
+  };
+
+  const allNotes = await getAllShoppingNotes(mockClient);
+  assert.equal(allNotes.length, 1);
+  assert.equal(allNotes[0].title, "Nota 1");
+
+  const singleNote = await getShoppingNoteById(1, mockClient);
+  assert.ok(singleNote);
+  assert.equal(singleNote.items?.length, 1);
+  assert.equal(singleNote.items?.[0].item_name, "Semen");
+  console.log("  ✓ Data access functions getAllShoppingNotes & getShoppingNoteById contract lolos");
+}
+
 console.log("\n=== SEMUA PENGECEKAN LOKAL SUKSES ===");
+
 
 

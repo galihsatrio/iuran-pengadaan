@@ -503,3 +503,115 @@ export function validateIuranInput(data: {
     },
   };
 }
+
+export interface ShoppingNoteItemInputSanitized {
+  item_name: string;
+  item_price: number;
+  sort_order: number;
+}
+
+export interface ShoppingNoteValidationResult {
+  valid: boolean;
+  errors: Record<string, string>;
+  sanitized?: {
+    title: string;
+    date: string;
+    items: ShoppingNoteItemInputSanitized[];
+    total_amount: number;
+  };
+}
+
+export function validateShoppingNoteInput(data: {
+  title?: unknown;
+  date?: unknown;
+  items?: unknown[];
+}): ShoppingNoteValidationResult {
+  const errors: Record<string, string> = {};
+
+  const rawTitle = typeof data.title === "string" ? data.title.trim() : "";
+  const rawDate = typeof data.date === "string" ? data.date.trim() : "";
+
+  if (!rawTitle) {
+    errors.title = "Judul nota belanja wajib diisi.";
+  } else if (rawTitle.length > 100) {
+    errors.title = "Judul nota belanja maksimal 100 karakter.";
+  }
+
+  if (!rawDate) {
+    errors.date = "Tanggal nota belanja wajib diisi.";
+  } else if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    errors.date = "Format tanggal harus YYYY-MM-DD (contoh: 2025-10-24).";
+  } else {
+    const [y, m, d] = rawDate.split("-").map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    if (
+      isNaN(dateObj.getTime()) ||
+      dateObj.getFullYear() !== y ||
+      dateObj.getMonth() !== m - 1 ||
+      dateObj.getDate() !== d
+    ) {
+      errors.date = "Tanggal kalender tidak valid.";
+    }
+  }
+
+  const rawItems = Array.isArray(data.items) ? data.items : [];
+  if (rawItems.length === 0) {
+    errors.items = "Minimal satu rincian item belanja harus diisi.";
+  }
+
+  const sanitizedItems: ShoppingNoteItemInputSanitized[] = [];
+  let totalAmount = 0;
+
+  for (let i = 0; i < rawItems.length; i++) {
+    const it = rawItems[i] as { item_name?: unknown; item_price?: unknown } | undefined;
+    const rawName = typeof it?.item_name === "string" ? it.item_name.trim() : "";
+    const rawPrice = typeof it?.item_price === "string" ? it.item_price.trim() : it?.item_price;
+
+    let hasItemError = false;
+
+    if (!rawName) {
+      errors[`items.${i}.item_name`] = `Nama barang ke-${i + 1} wajib diisi.`;
+      hasItemError = true;
+    } else if (rawName.length > 200) {
+      errors[`items.${i}.item_name`] = `Nama barang ke-${i + 1} maksimal 200 karakter.`;
+      hasItemError = true;
+    }
+
+    const numPrice = Number(rawPrice);
+    if (rawPrice === undefined || rawPrice === null || rawPrice === "") {
+      errors[`items.${i}.item_price`] = `Harga barang ke-${i + 1} wajib diisi.`;
+      hasItemError = true;
+    } else if (isNaN(numPrice) || !Number.isInteger(numPrice) || numPrice < 0) {
+      errors[`items.${i}.item_price`] = `Harga barang ke-${i + 1} harus berupa bilangan bulat tidak negatif (>= 0).`;
+      hasItemError = true;
+    } else if (numPrice > 1_000_000_000) {
+      errors[`items.${i}.item_price`] = `Harga barang ke-${i + 1} melebihi batas wajar (maksimal Rp 1.000.000.000).`;
+      hasItemError = true;
+    }
+
+    if (!hasItemError) {
+      totalAmount += numPrice;
+      sanitizedItems.push({
+        item_name: rawName,
+        item_price: numPrice,
+        sort_order: i,
+      });
+    }
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return { valid: false, errors };
+  }
+
+  return {
+    valid: true,
+    errors: {},
+    sanitized: {
+      title: rawTitle,
+      date: rawDate,
+      items: sanitizedItems,
+      total_amount: totalAmount,
+    },
+  };
+}
+
