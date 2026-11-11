@@ -177,6 +177,11 @@ export default async function PengurusPage() {
                       0
                     );
 
+                    const sortedBlockRecords = sortRecordsByCumulativePaidDesc(
+                      blockRecords,
+                      residentTotals
+                    );
+
                     return (
                       <div
                         key={namaBlok}
@@ -200,7 +205,140 @@ export default async function PengurusPage() {
                           </div>
                         </div>
 
-                        <div className="overflow-x-auto rounded-b-lg">
+                        {/* Mobile Card List (< lg) */}
+                        <div className="lg:hidden p-3.5 sm:p-4 space-y-3 bg-slate-50/50">
+                          {sortedBlockRecords.map((item) => {
+                            const rKey = getResidentKey(item);
+                            const cumulative =
+                              residentTotals.get(rKey) || Number(item.amount || 0);
+                            const duesStatus =
+                              calculateResidentDuesStatus(cumulative);
+                            const isEligibleForKey = cumulative >= 75000;
+
+                            return (
+                              <div
+                                key={item.id}
+                                className="p-3.5 sm:p-4 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-2.5"
+                              >
+                                {/* Baris atas */}
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="px-2 py-0.5 rounded font-mono text-xs font-bold text-slate-800 bg-slate-100 shrink-0">
+                                      {item.nomor_blok}
+                                    </span>
+                                    <span
+                                      className="font-bold text-slate-900 text-sm truncate"
+                                      title={item.nama_kepala_keluarga || "-"}
+                                    >
+                                      {item.nama_kepala_keluarga || "-"}
+                                    </span>
+                                  </div>
+                                  <div className="shrink-0">
+                                    <IuranRowActions
+                                      record={item}
+                                      isEligibleForKey={isEligibleForKey}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Baris tengah */}
+                                <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                                  <div>
+                                    <div className="text-[11px] text-slate-500 font-medium">
+                                      Jumlah Iuran
+                                    </div>
+                                    <div className="font-mono text-emerald-700 font-bold text-base tabular-nums">
+                                      {formatIDR(item.amount)}
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-[11px] text-slate-500 font-medium mb-0.5">
+                                      Tahap
+                                    </div>
+                                    <span
+                                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                                        duesStatus.stage === 3
+                                          ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                          : duesStatus.stage === 2
+                                          ? "bg-blue-100 text-blue-800 border border-blue-200"
+                                          : duesStatus.stage === 1
+                                          ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                          : "bg-slate-100 text-slate-600 border border-slate-200"
+                                      }`}
+                                    >
+                                      {duesStatus.stageLabel}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Baris bawah / footer card */}
+                                <div className="pt-2 border-t border-slate-100 space-y-2">
+                                  <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div className="bg-slate-50 rounded-lg p-2 border border-slate-100">
+                                      <span className="text-slate-500 block text-[10px] uppercase font-semibold">
+                                        Target
+                                      </span>
+                                      <span className="font-semibold text-slate-700 font-mono tabular-nums">
+                                        {formatIDR(duesStatus.target)}
+                                      </span>
+                                    </div>
+                                    <div className="bg-slate-50 rounded-lg p-2 border border-slate-100">
+                                      <span className="text-slate-500 block text-[10px] uppercase font-semibold">
+                                        Sisa Tagihan
+                                      </span>
+                                      {duesStatus.outstandingBalance > 0 ? (
+                                        <span className="text-amber-700 font-semibold font-mono tabular-nums">
+                                          {formatIDR(duesStatus.outstandingBalance)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-emerald-700 font-semibold">
+                                          Lunas (Rp0)
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {isEligibleForKey && (
+                                    <div>
+                                      <Link
+                                        href="/pengurus/pengambilan-kunci"
+                                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 w-full justify-center hover:bg-emerald-100 transition-colors"
+                                      >
+                                        <svg
+                                          className="w-3.5 h-3.5 text-emerald-700 shrink-0"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          viewBox="0 0 24 24"
+                                          aria-hidden="true"
+                                        >
+                                          <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                                          />
+                                        </svg>
+                                        Bisa Ambil Kunci
+                                      </Link>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+                            <span className="text-slate-600 font-medium">
+                              Subtotal Blok {namaBlok}:
+                            </span>
+                            <span className="text-emerald-700 font-bold font-mono text-sm tabular-nums">
+                              {formatIDR(blockTotal)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Desktop Table (>= lg) */}
+                        <div className="hidden lg:block overflow-x-auto rounded-b-lg">
                           <table className="w-full text-left text-sm text-slate-700 min-w-[920px]">
                             <thead className="bg-slate-50/75 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
                               <tr>
@@ -231,7 +369,7 @@ export default async function PengurusPage() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                              {sortRecordsByCumulativePaidDesc(blockRecords, residentTotals).map((item, index) => {
+                              {sortedBlockRecords.map((item, index) => {
                                 const rKey = getResidentKey(item);
                                 const cumulative = residentTotals.get(rKey) || Number(item.amount || 0);
                                 const duesStatus = calculateResidentDuesStatus(cumulative);
