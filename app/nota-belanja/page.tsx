@@ -5,9 +5,7 @@ import { getPublicSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getPublicShoppingNotes } from "@/lib/shopping-notes";
 import {
-  getPublicExpenses,
   calculateCashFlow,
-  groupExpensesByProcurement,
 } from "@/lib/expenses";
 import { getPaymentSettings } from "@/lib/payment-settings";
 import { formatIDR, formatDateOnlyID } from "@/lib/format";
@@ -80,15 +78,15 @@ async function NotaBelanjaContent() {
   }
 
   // Fetch semua data paralel
-  const [iuranData, expenses, notes] = await Promise.all([
+  const [iuranData, notes] = await Promise.all([
     supabase ? supabase.from("iuran").select("id, amount") : Promise.resolve({ data: [] }),
-    getPublicExpenses(supabase),
     getPublicShoppingNotes(supabase),
   ]);
 
   const records = (iuranData?.data ?? []) as { id: number; amount: number }[];
-  const cashFlow = calculateCashFlow(records, expenses);
-  const procurementGroups = groupExpensesByProcurement(expenses);
+  // ponytail: pengeluaran dari nota belanja saja, belum dari expenses table (belum production ready)
+  const notaExpenses = notes.map((n) => ({ amount: n.total_amount }));
+  const cashFlow = calculateCashFlow(records, notaExpenses);
 
   return (
     <div className="space-y-10 sm:space-y-12">
@@ -140,7 +138,7 @@ async function NotaBelanjaContent() {
                 {formatIDR(cashFlow.totalExpense)}
               </p>
               <p className="mt-1 text-xs text-slate-500 min-w-0 leading-relaxed">
-                Dari {expenses.length} alokasi kas
+                Dari {notes.length} nota belanja tercatat
               </p>
             </div>
           </div>
@@ -218,115 +216,7 @@ async function NotaBelanjaContent() {
         </div>
       </section>
 
-      {/* 2. Section Rincian Pengeluaran */}
-      <section aria-labelledby="rincian-pengeluaran-heading" className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-3">
-          <div>
-            <h2 id="rincian-pengeluaran-heading" className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-              Rincian Pengeluaran Kas
-            </h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Daftar seluruh pemakaian kas portal lingkungan dikelompokkan berdasarkan proyek atau kegiatan
-            </p>
-          </div>
-          <div className="text-sm font-semibold text-rose-700 bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-200/60 self-start sm:self-auto shrink-0">
-            Total Pengeluaran: {formatIDR(cashFlow.totalExpense)}
-          </div>
-        </div>
-
-        {expenses.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-12 text-center shadow-xs">
-            <div
-              className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-2xl text-slate-500 mb-4"
-              aria-hidden="true"
-            >
-              🧾
-            </div>
-            <h3 className="text-lg sm:text-xl font-bold text-slate-900">
-              Belum Ada Catatan Pengeluaran
-            </h3>
-            <p className="mt-2 text-sm sm:text-base text-slate-600 max-w-md mx-auto leading-relaxed">
-              Semua alokasi biaya dan pemakaian kas lingkungan akan ditampilkan di sini secara terbuka setelah dicatat oleh pengurus.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {procurementGroups.map((grp) => (
-              <div
-                key={grp.isUngrouped ? "__ungrouped__" : grp.groupName}
-                className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden"
-              >
-                {/* Header Group */}
-                <div className="p-4 sm:p-5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span
-                      className={`w-3 h-3 rounded-full shrink-0 ${
-                        grp.isUngrouped ? "bg-slate-400" : "bg-emerald-500"
-                      }`}
-                      aria-hidden="true"
-                    />
-                    <div className="min-w-0">
-                      <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug break-words">
-                        {grp.groupName}
-                      </h3>
-                      <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-                        {grp.items.length} item pengeluaran
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-left sm:text-right shrink-0">
-                    <span className="text-xs sm:text-sm uppercase font-semibold text-slate-500 block">
-                      Subtotal Kelompok
-                    </span>
-                    <span className="text-base sm:text-lg font-extrabold text-rose-700 tabular-nums">
-                      {formatIDR(grp.totalAmount)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Tabel Item Pengeluaran */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50/50 border-b border-slate-200 text-slate-600 text-sm font-semibold uppercase tracking-wider">
-                        <th scope="col" className="py-3 sm:py-3.5 px-4 sm:px-6 w-36 sm:w-44 whitespace-nowrap">
-                          Tanggal
-                        </th>
-                        <th scope="col" className="py-3 sm:py-3.5 px-4 sm:px-6">
-                          Deskripsi Pengeluaran
-                        </th>
-                        <th scope="col" className="py-3 sm:py-3.5 px-4 sm:px-6 text-right w-36 sm:w-48 whitespace-nowrap">
-                          Jumlah
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-slate-800 text-sm sm:text-base">
-                      {grp.items.map((expense) => (
-                        <tr
-                          key={expense.id}
-                          className="odd:bg-white even:bg-slate-50/50 hover:bg-slate-100/60 transition-colors"
-                        >
-                          <td className="py-3 sm:py-4 px-4 sm:px-6 text-slate-600 text-sm sm:text-base whitespace-nowrap">
-                            {formatDateOnlyID(expense.date)}
-                          </td>
-                          <td className="py-3 sm:py-4 px-4 sm:px-6 font-medium text-slate-900 leading-relaxed">
-                            {expense.description}
-                          </td>
-                          <td className="py-3 sm:py-4 px-4 sm:px-6 text-right font-bold text-rose-600 tabular-nums whitespace-nowrap">
-                            - {formatIDR(expense.amount)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* 3. Section Nota Belanja */}
+      {/* Section Nota Belanja */}
       <section aria-labelledby="nota-belanja-heading" className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-3">
           <div>
