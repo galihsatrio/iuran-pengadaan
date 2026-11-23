@@ -1,7 +1,8 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
-import { connection } from "next/server";
-import { getServerSupabase } from "@/lib/supabase/server";
+import { cacheLife } from "next/cache";
+import { getPublicSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { formatIDR, formatWhatsAppUrl, formatDateOnlyID } from "@/lib/format";
 import { getActiveTreasurers } from "@/lib/treasurers";
@@ -21,7 +22,8 @@ import {
 
 // ponytail: Direct server component query wrapped in Suspense for instant static shell streaming. Upgrade to pagination if records exceed 200 items.
 async function IuranContent() {
-  const configured = isSupabaseConfigured();
+  'use cache';
+  cacheLife('minutes');
 
   let records: IuranRecord[] = [];
   let expenses: PublicExpense[] = [];
@@ -29,9 +31,8 @@ async function IuranContent() {
   let showDonations = true;
   let errorMessage: string | null = null;
 
-  if (configured) {
-    const supabase = await getServerSupabase();
-    if (supabase) {
+  const supabase = getPublicSupabase();
+  if (supabase) {
       const settings = await getPaymentSettings(supabase);
       showExpenses = settings.show_expenses_on_home ?? true;
       showDonations = settings.show_donations_on_home ?? true;
@@ -65,7 +66,6 @@ async function IuranContent() {
         expenses = await getPublicExpenses(supabase);
       }
     }
-  }
 
   const cashFlow = calculateCashFlow(records, expenses);
   const procurementGroups = groupExpensesByProcurement(expenses);
@@ -1220,9 +1220,10 @@ function PaymentInfoSkeleton() {
 }
 
 async function PaymentInfoSection() {
-  await connection();
-  const configured = isSupabaseConfigured();
-  const supabase = configured ? await getServerSupabase() : null;
+  'use cache';
+  cacheLife('hours');
+
+  const supabase = getPublicSupabase();
   const activeTreasurers = await getActiveTreasurers(supabase);
 
   return (
@@ -1488,14 +1489,13 @@ function GalleryPreviewSkeleton() {
 
 // ponytail: Direct server component query fetching limited preview items (6 photos) wrapped in Suspense. Full gallery at /galeri.
 async function GalleryPreviewSection() {
-  const configured = isSupabaseConfigured();
+  'use cache';
+  cacheLife('minutes');
   let items: PublicGalleryItem[] = [];
 
-  if (configured) {
-    const supabase = await getServerSupabase();
-    if (supabase) {
-      items = await getPublicGalleryItems(supabase, "all", 6);
-    }
+  const supabase = getPublicSupabase();
+  if (supabase) {
+    items = await getPublicGalleryItems(supabase, "all", 6);
   }
 
   return (
@@ -1549,12 +1549,12 @@ async function GalleryPreviewSection() {
                   className="relative aspect-[4/3] bg-slate-100 overflow-hidden block focus-visible:outline-2 focus-visible:outline-emerald-600"
                   aria-label={`Lihat foto ${item.title} di galeri lengkap`}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={item.image_url}
                     alt={item.title}
-                    loading="lazy"
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    fill
+                    sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                    className="object-cover transition-transform duration-300 group-hover:scale-105"
                   />
                   <div className="absolute top-2.5 left-2.5">
                     {item.category === "kegiatan" ? (

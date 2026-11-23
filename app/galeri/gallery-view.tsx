@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useId, useEffect } from "react";
 import type { PublicGalleryItem, GalleryCategory } from "@/lib/types";
 import { formatDateOnlyID } from "@/lib/format";
@@ -139,12 +140,12 @@ export default function GalleryView({ initialItems }: GalleryViewProps) {
                 className="relative aspect-[4/3] bg-slate-100 overflow-hidden cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-600"
                 aria-label={`Lihat foto ${item.title}`}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={item.image_url}
                   alt={item.title}
-                  loading="lazy"
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  fill
+                  sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                  className="object-cover transition-transform duration-300 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors flex items-center justify-center">
                   <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/70 text-white text-xs px-2.5 py-1 rounded-full backdrop-blur-xs flex items-center gap-1.5">

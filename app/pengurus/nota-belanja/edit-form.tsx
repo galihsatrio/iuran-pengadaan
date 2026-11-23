@@ -421,7 +421,7 @@ export default function EditShoppingNoteForm({
               className="block w-full text-xs sm:text-sm text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 file:cursor-pointer transition-colors border border-slate-300 rounded-lg p-1.5"
             />
             <p className="mt-1 text-xs text-slate-500">
-              Format: PNG, JPG, atau WEBP. Maksimal 5MB.
+              Format: PNG, JPG, atau WEBP. Maksimal 5MB. (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung)
             </p>
 
             {previewUrl && (

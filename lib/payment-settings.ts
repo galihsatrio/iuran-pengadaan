@@ -182,6 +182,23 @@ export function validateImageBuffer(
     return { valid: true, extension: "webp", mimeType: "image/webp" };
   }
 
+  // HEIC/HEIF (kamera iPhone): ftyp box di offset 4-7 dengan brand heic/heix/hevc/hevx/mif1/msf1
+  // ponytail: only checks major brand at offset 8-12; check compatible brands box if phone uses uncommon container
+  const isHeic =
+    buffer.length >= 12 &&
+    buffer.subarray(4, 8).toString("ascii") === "ftyp" &&
+    ["heic", "heix", "hevc", "hevx", "mif1", "msf1"].includes(
+      buffer.subarray(8, 12).toString("ascii").toLowerCase()
+    );
+
+  if (isHeic) {
+    return {
+      valid: false,
+      error:
+        "Format HEIC/HEIF dari kamera iPhone tidak didukung. Silakan pilih foto dari Galeri dan ubah format ke JPG terlebih dahulu, atau gunakan kamera Android.",
+    };
+  }
+
   return {
     valid: false,
     error: "Format berkas tidak didukung. Harap unggah gambar berekstensi PNG, JPG, atau WEBP.",

@@ -1,7 +1,17 @@
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { connection } from "next/server";
 import { isSupabaseConfigured } from "./config";
+
+// ponytail: Public client using anon key without cookies or connection() to allow Next.js component caching.
+export function getPublicSupabase() {
+  if (!isSupabaseConfigured()) return null;
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 // ponytail: Server client using cookies to preserve auth context. Strictly uses anon key, relying on DB RLS for permissions rather than bypass keys.
 export async function getServerSupabase() {

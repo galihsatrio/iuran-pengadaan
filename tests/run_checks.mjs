@@ -342,6 +342,27 @@ assert.equal(checkFileSizePreBuffer(3 * 1024 * 1024).valid, false);
 assert.equal(checkFileSizePreBuffer(500 * 1024).valid, true);
 console.log("  ✓ Verifikasi pengecekan file size sebelum load arrayBuffer lolos");
 
+// 5.9 Deteksi Format HEIC/HEIF Kamera iPhone
+const heicBuffer = Buffer.concat([
+  Buffer.from([0x00, 0x00, 0x00, 0x18]), // box size
+  Buffer.from("ftypheic", "ascii"),       // ftyp + major brand
+  Buffer.from([0x00, 0x00, 0x00, 0x00]), // minor version
+  Buffer.from("mif1heic", "ascii"),       // compatible brands
+]);
+const heicRes = validateImageBuffer(heicBuffer);
+assert.equal(heicRes.valid, false, "HEIC harus ditolak");
+assert.match(heicRes.error || "", /Format HEIC\/HEIF dari kamera iPhone tidak didukung/);
+assert.match(heicRes.error || "", /Galeri/);
+
+const mif1Buffer = Buffer.concat([
+  Buffer.from([0x00, 0x00, 0x00, 0x18]),
+  Buffer.from("ftypmif1", "ascii"),
+]);
+const mif1Res = validateImageBuffer(mif1Buffer);
+assert.equal(mif1Res.valid, false, "MIF1 HEIF harus ditolak");
+assert.match(mif1Res.error || "", /Format HEIC\/HEIF/);
+console.log("  ✓ Deteksi berkas HEIC/HEIF kamera iPhone dengan pesan terarah lolos");
+
 // 6. Uji Preservasi Metadata Rekening & Defaults
 console.log("\n[6] Uji Preservasi Metadata Pembayaran & Defaults:");
 

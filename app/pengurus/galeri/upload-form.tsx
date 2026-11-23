@@ -175,7 +175,7 @@ export default function GalleryUploadForm() {
             className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer border border-slate-200 rounded-lg p-1 bg-white focus-visible:outline-2 focus-visible:outline-emerald-600"
           />
           <p className="mt-1 text-[11px] text-slate-500">
-            Format yang didukung: PNG, JPG, JPEG, WEBP. Maksimal ukuran 5MB.
+            Format yang didukung: PNG, JPG, JPEG, WEBP. Maksimal ukuran 5MB. (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung)
           </p>
           {state.errors?.image && (
             <p className="mt-1 text-xs text-rose-600">{state.errors.image}</p>

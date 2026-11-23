@@ -177,8 +177,8 @@ export default function EditTreasurerForm({
           />
           <p className="mt-1 text-[11px] text-slate-400">
             {treasurer.qris_image_url
-              ? "Pilih berkas baru jika ingin mengganti gambar QRIS saat ini. Maksimal 2MB (PNG, JPG, WEBP)."
-              : "Unggah berkas QRIS bendahara ini jika ada. Maksimal 2MB (PNG, JPG, WEBP)."}
+              ? "Pilih berkas baru jika ingin mengganti gambar QRIS saat ini. Maksimal 2MB (PNG, JPG, WEBP). (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung)"
+              : "Unggah berkas QRIS bendahara ini jika ada. Maksimal 2MB (PNG, JPG, WEBP). (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung)"}
           </p>
         </div>
 

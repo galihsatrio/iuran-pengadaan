@@ -366,7 +366,7 @@ export default function CreateExpenseForm({
             className="w-full text-xs sm:text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"
           />
           <p className="mt-1 text-xs text-slate-500">
-            Format: PNG, JPG, atau WEBP. Maksimal 2MB. Foto nota ini otomatis terlampir untuk seluruh rincian belanja di atas dan hanya dapat dilihat oleh pengurus terdaftar.
+            Format: PNG, JPG, atau WEBP. Maksimal 2MB. (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung). Foto nota ini otomatis terlampir untuk seluruh rincian belanja di atas dan hanya dapat dilihat oleh pengurus terdaftar.
           </p>
         </div>
 
