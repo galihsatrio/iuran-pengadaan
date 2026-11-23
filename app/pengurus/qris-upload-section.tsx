@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useRef, useEffect } from "react";
+import { useActionState, useRef, useEffect, useState } from "react";
 import { uploadQrisAction, updateBendaharaAction, type ActionResult } from "./actions";
 import QrisPreviewToggle from "@/components/qris-preview";
 import type { PaymentSettings } from "@/lib/types";
+import { compressImage } from "@/lib/compress-image";
 
 const initialUploadState: ActionResult = {
   success: false,
@@ -29,12 +30,53 @@ export default function QrisUploadSection({
     initialBendaharaState
   );
   const uploadFormRef = useRef<HTMLFormElement>(null);
+  const qrisInputRef = useRef<HTMLInputElement>(null);
+  const isReadyToSubmitRef = useRef(false);
+  const [isCompressing, setIsCompressing] = useState(false);
 
   useEffect(() => {
     if (uploadState.success && uploadFormRef.current) {
       uploadFormRef.current.reset();
     }
   }, [uploadState.success]);
+
+  async function handleUploadSubmit(e: React.FormEvent<HTMLFormElement>) {
+    if (isReadyToSubmitRef.current) {
+      isReadyToSubmitRef.current = false;
+      return;
+    }
+
+    const file = qrisInputRef.current?.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    e.preventDefault();
+    setIsCompressing(true);
+
+    try {
+      const compressed = await compressImage(file, 1024, 0.9);
+      const newName = file.name.includes(".")
+        ? file.name.replace(/\.[^.]+$/, ".jpg")
+        : `${file.name}.jpg`;
+      const compressedFile = new File([compressed], newName, {
+        type: "image/jpeg",
+      });
+
+      const dt = new DataTransfer();
+      dt.items.add(compressedFile);
+      if (qrisInputRef.current) {
+        qrisInputRef.current.files = dt.files;
+      }
+    } catch {
+      // compression failed — submit original
+    } finally {
+      setIsCompressing(false);
+    }
+
+    isReadyToSubmitRef.current = true;
+    uploadFormRef.current?.requestSubmit();
+  }
 
   const hasQris = Boolean(initialSettings.qris_image_url);
 
@@ -185,6 +227,7 @@ export default function QrisUploadSection({
         <form
           ref={uploadFormRef}
           action={uploadFormAction}
+          onSubmit={handleUploadSubmit}
           className="flex flex-col sm:flex-row sm:items-end gap-3"
         >
           <div className="flex-1">
@@ -195,25 +238,28 @@ export default function QrisUploadSection({
               Unggah Berkas Gambar QRIS Baru
             </label>
             <input
+              ref={qrisInputRef}
               id="qris_image"
               name="qris_image"
               type="file"
               accept="image/png,image/jpeg,image/webp"
               required
-              disabled={isUploadPending}
+              disabled={isUploadPending || isCompressing}
               className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer border border-slate-200 rounded-lg p-1 bg-white"
             />
             <p className="mt-1 text-[11px] text-slate-400">
-              Format yang didukung: PNG, JPG, WEBP. Ukuran maksimal 2MB. (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung)
+              Format: PNG, JPG, WEBP. Gambar akan dikompresi otomatis sebelum diunggah. (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung)
             </p>
           </div>
 
           <button
             type="submit"
-            disabled={isUploadPending}
+            disabled={isUploadPending || isCompressing}
             className="w-full sm:w-auto px-4 py-2.5 min-h-[44px] justify-center inline-flex items-center text-xs sm:text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs focus-visible:outline-2 focus-visible:outline-emerald-600 disabled:opacity-50 cursor-pointer shrink-0"
           >
-            {isUploadPending
+            {isCompressing
+              ? "Memproses foto..."
+              : isUploadPending
               ? "Mengunggah..."
               : hasQris
               ? "Ganti Gambar QRIS"

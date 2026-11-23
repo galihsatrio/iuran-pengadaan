@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useRef } from "react";
 import Link from "next/link";
 import { updateExpenseAction, type ActionResult } from "../actions";
 import type { ExpenseRecord } from "@/lib/types";
+import { compressImage } from "@/lib/compress-image";
 
 const initialState: ActionResult = {
   success: false,
@@ -24,7 +25,49 @@ export default function EditExpenseForm({
     updateActionWithId,
     initialState
   );
+  const formRef = useRef<HTMLFormElement>(null);
+  const receiptInputRef = useRef<HTMLInputElement>(null);
+  const isReadyToSubmitRef = useRef(false);
   const [removeReceipt, setRemoveReceipt] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    if (isReadyToSubmitRef.current) {
+      isReadyToSubmitRef.current = false;
+      return;
+    }
+
+    const file = receiptInputRef.current?.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    e.preventDefault();
+    setIsCompressing(true);
+
+    try {
+      const compressed = await compressImage(file, 1920, 0.82);
+      const newName = file.name.includes(".")
+        ? file.name.replace(/\.[^.]+$/, ".jpg")
+        : `${file.name}.jpg`;
+      const compressedFile = new File([compressed], newName, {
+        type: "image/jpeg",
+      });
+
+      const dt = new DataTransfer();
+      dt.items.add(compressedFile);
+      if (receiptInputRef.current) {
+        receiptInputRef.current.files = dt.files;
+      }
+    } catch {
+      // compression failed — submit original
+    } finally {
+      setIsCompressing(false);
+    }
+
+    isReadyToSubmitRef.current = true;
+    formRef.current?.requestSubmit();
+  }
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs max-w-2xl mx-auto">
@@ -60,7 +103,7 @@ export default function EditExpenseForm({
         </div>
       )}
 
-      <form action={formAction} className="space-y-5">
+      <form ref={formRef} action={formAction} onSubmit={handleSubmit} className="space-y-5">
         {/* Tanggal */}
         <div>
           <label
@@ -252,15 +295,16 @@ export default function EditExpenseForm({
               {signedReceiptUrl ? "Unggah foto baru untuk mengganti berkas saat ini:" : "Unggah foto kuitansi:"}
             </span>
             <input
+              ref={receiptInputRef}
               id="receipt"
               name="receipt"
               type="file"
               accept="image/png,image/jpeg,image/webp"
-              disabled={isPending}
+              disabled={isPending || isCompressing}
               className="w-full text-xs sm:text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"
             />
             <p className="mt-1 text-xs text-slate-500">
-              Format: PNG, JPG, atau WEBP. Maksimal 2MB. (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung). Penyimpanan privat pengurus.
+              Format: PNG, JPG, WEBP. Foto akan dikompresi otomatis sebelum diunggah. (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung). Penyimpanan privat pengurus.
             </p>
           </div>
         </div>
@@ -275,10 +319,14 @@ export default function EditExpenseForm({
           </Link>
           <button
             type="submit"
-            disabled={isPending}
+            disabled={isPending || isCompressing}
             className="w-full sm:w-auto px-5 py-2.5 min-h-[44px] inline-flex items-center justify-center text-xs sm:text-sm font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors cursor-pointer disabled:opacity-50"
           >
-            {isPending ? "Menyimpan..." : "Simpan Perubahan"}
+            {isCompressing
+              ? "Memproses foto..."
+              : isPending
+              ? "Menyimpan..."
+              : "Simpan Perubahan"}
           </button>
         </div>
       </form>

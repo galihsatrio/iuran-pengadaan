@@ -4,6 +4,7 @@ import { formatDateOnlyID, normalizeWhatsAppNumber, formatWhatsAppUrl } from "..
 import { validateIuranInput, validateExpenseInput, validateBatchExpenseInput, validateGalleryInput, validateHomeExpensesSettingInput, validateHomeVisibilitySettingsInput, validateShoppingNoteInput } from "../lib/validation.ts";
 import { calculateCashFlow, groupExpensesByProcurement, UNGROUPED_PROCUREMENT_LABEL } from "../lib/expenses.ts";
 import { getAllShoppingNotes, getShoppingNoteById } from "../lib/shopping-notes.ts";
+import { compressImage } from "../lib/compress-image.ts";
 import {
   validateImageBuffer,
   MAX_FILE_SIZE_BYTES,
@@ -2311,6 +2312,15 @@ console.log("\n[28] Uji Validasi & Kontrak Nota Belanja (Shopping Notes):");
   assert.equal(singleNote.items?.length, 1);
   assert.equal(singleNote.items?.[0].item_name, "Semen");
   console.log("  ✓ Data access functions getAllShoppingNotes & getShoppingNoteById contract lolos");
+}
+
+// 29. Uji Utilitas Kompresi Gambar
+console.log("\n[29] Uji Utilitas Kompresi Gambar (compressImage):");
+{
+  const dummyFile = new File(["test data"], "test.txt", { type: "text/plain" });
+  const result = await compressImage(dummyFile);
+  assert.equal(result, dummyFile, "Non-window / non-image environment harus return file asli dengan aman");
+  console.log("  ✓ Fallback non-window / non-image aman");
 }
 
 console.log("\n=== SEMUA PENGECEKAN LOKAL SUKSES ===");

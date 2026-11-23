@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useRef } from "react";
+import { useActionState, useRef, useState } from "react";
 import Link from "next/link";
 import { createTreasurerAction, type ActionResult } from "../actions";
+import { compressImage } from "@/lib/compress-image";
 
 const initialState: ActionResult = {
   success: false,
@@ -15,6 +16,47 @@ export default function CreateTreasurerForm() {
     initialState
   );
   const formRef = useRef<HTMLFormElement>(null);
+  const qrisInputRef = useRef<HTMLInputElement>(null);
+  const isReadyToSubmitRef = useRef(false);
+  const [isCompressing, setIsCompressing] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    if (isReadyToSubmitRef.current) {
+      isReadyToSubmitRef.current = false;
+      return;
+    }
+
+    const file = qrisInputRef.current?.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    e.preventDefault();
+    setIsCompressing(true);
+
+    try {
+      const compressed = await compressImage(file, 1024, 0.9);
+      const newName = file.name.includes(".")
+        ? file.name.replace(/\.[^.]+$/, ".jpg")
+        : `${file.name}.jpg`;
+      const compressedFile = new File([compressed], newName, {
+        type: "image/jpeg",
+      });
+
+      const dt = new DataTransfer();
+      dt.items.add(compressedFile);
+      if (qrisInputRef.current) {
+        qrisInputRef.current.files = dt.files;
+      }
+    } catch {
+      // compression failed — submit original
+    } finally {
+      setIsCompressing(false);
+    }
+
+    isReadyToSubmitRef.current = true;
+    formRef.current?.requestSubmit();
+  }
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs max-w-2xl mx-auto">
@@ -50,7 +92,7 @@ export default function CreateTreasurerForm() {
         </div>
       )}
 
-      <form ref={formRef} action={formAction} className="space-y-5">
+      <form ref={formRef} action={formAction} onSubmit={handleSubmit} className="space-y-5">
         {/* Nama Bendahara */}
         <div>
           <label
@@ -140,15 +182,16 @@ export default function CreateTreasurerForm() {
             Unggah Berkas QRIS (Opsional)
           </label>
           <input
+            ref={qrisInputRef}
             id="qris_image"
             name="qris_image"
             type="file"
             accept="image/png,image/jpeg,image/webp"
-            disabled={isPending}
+            disabled={isPending || isCompressing}
             className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer border border-slate-200 rounded-lg p-1 bg-white"
           />
           <p className="mt-1 text-[11px] text-slate-400">
-            Format yang didukung: PNG, JPG, WEBP. Ukuran maksimal 2MB. (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung)
+            Format: PNG, JPG, WEBP. Gambar akan dikompresi otomatis sebelum diunggah. (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung)
           </p>
         </div>
 
@@ -162,10 +205,14 @@ export default function CreateTreasurerForm() {
           </Link>
           <button
             type="submit"
-            disabled={isPending}
+            disabled={isPending || isCompressing}
             className="w-full sm:w-auto px-5 py-2.5 min-h-[44px] justify-center inline-flex items-center text-xs sm:text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-xs focus-visible:outline-2 focus-visible:outline-emerald-600 disabled:opacity-50 cursor-pointer"
           >
-            {isPending ? "Menyimpan..." : "Simpan Bendahara"}
+            {isCompressing
+              ? "Memproses foto..."
+              : isPending
+              ? "Menyimpan..."
+              : "Simpan Bendahara"}
           </button>
         </div>
       </form>

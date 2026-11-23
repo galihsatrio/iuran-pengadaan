@@ -4,6 +4,7 @@ import { useActionState, useRef, useState } from "react";
 import Link from "next/link";
 import { createExpenseAction, type ActionResult } from "../actions";
 import { formatIDR } from "@/lib/format";
+import { compressImage } from "@/lib/compress-image";
 
 const initialState: ActionResult = {
   success: false,
@@ -26,11 +27,14 @@ export default function CreateExpenseForm({
     initialState
   );
   const formRef = useRef<HTMLFormElement>(null);
+  const receiptInputRef = useRef<HTMLInputElement>(null);
+  const isReadyToSubmitRef = useRef(false);
   const today = new Date().toISOString().split("T")[0];
 
   const [items, setItems] = useState<FormItem[]>([
     { id: "item-1", description: "", amount: "" },
   ]);
+  const [isCompressing, setIsCompressing] = useState(false);
 
   const handleAddItem = () => {
     setItems((prev) => [
@@ -66,6 +70,44 @@ export default function CreateExpenseForm({
       formRef.current.reset();
     }
   };
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    if (isReadyToSubmitRef.current) {
+      isReadyToSubmitRef.current = false;
+      return;
+    }
+
+    const file = receiptInputRef.current?.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    e.preventDefault();
+    setIsCompressing(true);
+
+    try {
+      const compressed = await compressImage(file, 1920, 0.82);
+      const newName = file.name.includes(".")
+        ? file.name.replace(/\.[^.]+$/, ".jpg")
+        : `${file.name}.jpg`;
+      const compressedFile = new File([compressed], newName, {
+        type: "image/jpeg",
+      });
+
+      const dt = new DataTransfer();
+      dt.items.add(compressedFile);
+      if (receiptInputRef.current) {
+        receiptInputRef.current.files = dt.files;
+      }
+    } catch {
+      // compression failed — submit original
+    } finally {
+      setIsCompressing(false);
+    }
+
+    isReadyToSubmitRef.current = true;
+    formRef.current?.requestSubmit();
+  }
 
   const totalCalculated = items.reduce((sum, it) => {
     const num = Number(it.amount);
@@ -113,7 +155,7 @@ export default function CreateExpenseForm({
         </div>
       )}
 
-      <form ref={formRef} action={formAction} className="space-y-6">
+      <form ref={formRef} action={formAction} onSubmit={handleSubmit} className="space-y-6">
         {/* Kelompok Pengadaan & Tanggal */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Kelompok Pengadaan */}
@@ -358,15 +400,16 @@ export default function CreateExpenseForm({
             Foto Kuitansi / Nota Pembelian (Opsional)
           </label>
           <input
+            ref={receiptInputRef}
             id="receipt"
             name="receipt"
             type="file"
             accept="image/png,image/jpeg,image/webp"
-            disabled={isPending}
+            disabled={isPending || isCompressing}
             className="w-full text-xs sm:text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"
           />
           <p className="mt-1 text-xs text-slate-500">
-            Format: PNG, JPG, atau WEBP. Maksimal 2MB. (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung). Foto nota ini otomatis terlampir untuk seluruh rincian belanja di atas dan hanya dapat dilihat oleh pengurus terdaftar.
+            Format: PNG, JPG, WEBP. Foto akan dikompresi otomatis sebelum diunggah. (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung). Foto nota ini otomatis terlampir untuk seluruh rincian belanja di atas dan hanya dapat dilihat oleh pengurus terdaftar.
           </p>
         </div>
 
@@ -380,10 +423,14 @@ export default function CreateExpenseForm({
           </Link>
           <button
             type="submit"
-            disabled={isPending}
+            disabled={isPending || isCompressing}
             className="w-full sm:w-auto px-5 py-2.5 min-h-[44px] inline-flex items-center justify-center text-xs sm:text-sm font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors cursor-pointer disabled:opacity-50"
           >
-            {isPending ? "Menyimpan..." : `Simpan Pengeluaran (${items.length} Item)`}
+            {isCompressing
+              ? "Memproses foto..."
+              : isPending
+              ? "Menyimpan..."
+              : `Simpan Pengeluaran (${items.length} Item)`}
           </button>
         </div>
       </form>

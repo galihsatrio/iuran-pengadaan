@@ -2,6 +2,7 @@
 
 import { useActionState, useRef, useState, useEffect } from "react";
 import { uploadGalleryPhotoAction, type ActionResult } from "../actions";
+import { compressImage } from "@/lib/compress-image";
 
 const initialState: ActionResult = {
   success: false,
@@ -14,12 +15,17 @@ export default function GalleryUploadForm() {
     initialState
   );
   const formRef = useRef<HTMLFormElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const isReadyToSubmitRef = useRef(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
 
   useEffect(() => {
     if (state.success && formRef.current) {
       formRef.current.reset();
+      setSelectedFile(null);
+      setPreviewUrl(null);
     }
   }, [state.success]);
 
@@ -47,6 +53,49 @@ export default function GalleryUploadForm() {
     }
   }
 
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    if (isReadyToSubmitRef.current) {
+      isReadyToSubmitRef.current = false;
+      return;
+    }
+
+    const file = imageInputRef.current?.files?.[0] || selectedFile;
+    if (!file) {
+      return;
+    }
+
+    e.preventDefault();
+    setIsCompressing(true);
+
+    try {
+      const compressed = await compressImage(file, 1920, 0.82);
+      const newName = file.name.includes(".")
+        ? file.name.replace(/\.[^.]+$/, ".jpg")
+        : `${file.name}.jpg`;
+      const compressedFile = new File([compressed], newName, {
+        type: "image/jpeg",
+      });
+
+      const dt = new DataTransfer();
+      dt.items.add(compressedFile);
+      if (imageInputRef.current) {
+        imageInputRef.current.files = dt.files;
+      }
+      setSelectedFile(compressedFile);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      setPreviewUrl(URL.createObjectURL(compressedFile));
+    } catch {
+      // compression failed — submit original
+    } finally {
+      setIsCompressing(false);
+    }
+
+    isReadyToSubmitRef.current = true;
+    formRef.current?.requestSubmit();
+  }
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5 sm:p-6 shadow-xs">
       <div className="border-b border-slate-100 pb-4 mb-5">
@@ -71,7 +120,7 @@ export default function GalleryUploadForm() {
         </div>
       )}
 
-      <form ref={formRef} action={formAction} className="space-y-4">
+      <form ref={formRef} action={formAction} onSubmit={handleSubmit} className="space-y-4">
         {/* Judul Foto */}
         <div>
           <label htmlFor="title" className="block text-xs sm:text-sm font-semibold text-slate-700 mb-1">
@@ -165,17 +214,18 @@ export default function GalleryUploadForm() {
             Berkas Gambar Foto <span className="text-rose-500">*</span>
           </label>
           <input
+            ref={imageInputRef}
             id="image"
             name="image"
             type="file"
             accept="image/png,image/jpeg,image/webp"
             required
-            disabled={isPending}
+            disabled={isPending || isCompressing}
             onChange={handleFileChange}
             className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer border border-slate-200 rounded-lg p-1 bg-white focus-visible:outline-2 focus-visible:outline-emerald-600"
           />
           <p className="mt-1 text-[11px] text-slate-500">
-            Format yang didukung: PNG, JPG, JPEG, WEBP. Maksimal ukuran 5MB. (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung)
+            Format: PNG, JPG, WEBP. Foto akan dikompresi otomatis sebelum diunggah. (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung)
           </p>
           {state.errors?.image && (
             <p className="mt-1 text-xs text-rose-600">{state.errors.image}</p>
@@ -200,10 +250,18 @@ export default function GalleryUploadForm() {
         <div className="pt-2">
           <button
             type="submit"
-            disabled={isPending}
+            disabled={isPending || isCompressing}
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] text-xs sm:text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-xs cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
           >
-            {isPending ? (
+            {isCompressing ? (
+              <>
+                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                <span>Memproses foto...</span>
+              </>
+            ) : isPending ? (
               <>
                 <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />

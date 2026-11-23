@@ -5,6 +5,7 @@ import Link from "next/link";
 import { updateShoppingNoteAction, type ActionResult } from "../actions";
 import { formatIDR } from "@/lib/format";
 import type { ShoppingNote } from "@/lib/types";
+import { compressImage } from "@/lib/compress-image";
 
 const initialState: ActionResult = {
   success: false,
@@ -43,8 +44,11 @@ export default function EditShoppingNoteForm({
     return [{ id: "item-1", name: "", price: "" }];
   });
 
+  const formRef = useRef<HTMLFormElement>(null);
+  const isReadyToSubmitRef = useRef(false);
   const [removePhoto, setRemovePhoto] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddItem = () => {
@@ -84,6 +88,48 @@ export default function EditShoppingNoteForm({
       setPreviewUrl(null);
     }
   };
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    if (isReadyToSubmitRef.current) {
+      isReadyToSubmitRef.current = false;
+      return;
+    }
+
+    const file = fileInputRef.current?.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    e.preventDefault();
+    setIsCompressing(true);
+
+    try {
+      const compressed = await compressImage(file, 1920, 0.82);
+      const newName = file.name.includes(".")
+        ? file.name.replace(/\.[^.]+$/, ".jpg")
+        : `${file.name}.jpg`;
+      const compressedFile = new File([compressed], newName, {
+        type: "image/jpeg",
+      });
+
+      const dt = new DataTransfer();
+      dt.items.add(compressedFile);
+      if (fileInputRef.current) {
+        fileInputRef.current.files = dt.files;
+      }
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      setPreviewUrl(URL.createObjectURL(compressedFile));
+    } catch {
+      // compression failed — submit original
+    } finally {
+      setIsCompressing(false);
+    }
+
+    isReadyToSubmitRef.current = true;
+    formRef.current?.requestSubmit();
+  }
 
   const totalCalculated = items.reduce((sum, it) => {
     const num = Number(it.price);
@@ -143,7 +189,7 @@ export default function EditShoppingNoteForm({
         </div>
       )}
 
-      <form action={formAction} className="space-y-6">
+      <form ref={formRef} action={formAction} onSubmit={handleSubmit} className="space-y-6">
         {/* Judul & Tanggal */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
@@ -417,11 +463,11 @@ export default function EditShoppingNoteForm({
               type="file"
               accept="image/png,image/jpeg,image/webp"
               onChange={handlePhotoChange}
-              disabled={isPending}
+              disabled={isPending || isCompressing}
               className="block w-full text-xs sm:text-sm text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 file:cursor-pointer transition-colors border border-slate-300 rounded-lg p-1.5"
             />
             <p className="mt-1 text-xs text-slate-500">
-              Format: PNG, JPG, atau WEBP. Maksimal 5MB. (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung)
+              Format: PNG, JPG, WEBP. Foto akan dikompresi otomatis sebelum diunggah. (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung)
             </p>
 
             {previewUrl && (
@@ -455,10 +501,33 @@ export default function EditShoppingNoteForm({
           </Link>
           <button
             type="submit"
-            disabled={isPending}
+            disabled={isPending || isCompressing}
             className="w-full sm:w-auto px-5 py-2.5 min-h-[42px] inline-flex items-center justify-center gap-2 text-xs sm:text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
           >
-            {isPending ? (
+            {isCompressing ? (
+              <>
+                <svg
+                  className="w-4 h-4 animate-spin text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v8H4z"
+                  />
+                </svg>
+                <span>Memproses foto...</span>
+              </>
+            ) : isPending ? (
               <>
                 <svg
                   className="w-4 h-4 animate-spin text-white"
