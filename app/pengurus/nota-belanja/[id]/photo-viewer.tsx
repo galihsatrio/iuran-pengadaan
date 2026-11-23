@@ -3,12 +3,46 @@
 import { useEffect, useState } from "react";
 
 interface NotePhotoViewerProps {
-  signedUrl: string;
+  photoPath: string;
   title: string;
 }
 
-export default function NotePhotoViewer({ signedUrl, title }: NotePhotoViewerProps) {
+export default function NotePhotoViewer({ photoPath, title }: NotePhotoViewerProps) {
+  const [photoState, setPhotoState] = useState<{
+    path: string;
+    url: string | null;
+    loading: boolean;
+    error: boolean;
+  }>({
+    path: photoPath,
+    url: null,
+    loading: true,
+    error: false,
+  });
   const [fullscreen, setFullscreen] = useState(false);
+
+  const loading = photoState.path !== photoPath || photoState.loading;
+  const error = photoState.path === photoPath && photoState.error;
+  const signedUrl = photoState.path === photoPath ? photoState.url : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/nota-photo?path=${encodeURIComponent(photoPath)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((data) => {
+        if (!cancelled) {
+          setPhotoState({ path: photoPath, url: data.url, loading: false, error: false });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPhotoState({ path: photoPath, url: null, loading: false, error: true });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [photoPath]);
 
   useEffect(() => {
     document.body.style.overflow = fullscreen ? "hidden" : "";
@@ -25,6 +59,23 @@ export default function NotePhotoViewer({ signedUrl, title }: NotePhotoViewerPro
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
   }, [fullscreen]);
+
+  if (loading) {
+    return (
+      <div className="mt-4 pt-4 border-t border-slate-100">
+        <div className="h-5 w-32 bg-slate-200 rounded animate-pulse mb-2" />
+        <div className="rounded-lg bg-slate-100 animate-pulse h-48 w-full" />
+      </div>
+    );
+  }
+
+  if (error || !signedUrl) {
+    return (
+      <div className="mt-4 pt-4 border-t border-slate-100">
+        <p className="text-xs text-slate-500">Gagal memuat foto nota. Coba muat ulang halaman.</p>
+      </div>
+    );
+  }
 
   return (
     <>

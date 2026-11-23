@@ -2,7 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { getShoppingNoteById, getShoppingNoteSignedUrl } from "@/lib/shopping-notes";
+import { getShoppingNoteById } from "@/lib/shopping-notes";
 import { formatIDR, formatDateOnlyID } from "@/lib/format";
 import DeleteNoteButton from "../delete-note-button";
 import NotePhotoViewer from "./photo-viewer";
@@ -96,11 +96,6 @@ export default async function ShoppingNoteDetailPage({ params }: ShoppingNoteDet
     notFound();
   }
 
-  let signedPhotoUrl: string | null = null;
-  if (note.photo_path) {
-    signedPhotoUrl = await getShoppingNoteSignedUrl(supabase, note.photo_path, 300);
-  }
-
   const items = note.items || [];
 
   return (
@@ -164,8 +159,8 @@ export default async function ShoppingNoteDetailPage({ params }: ShoppingNoteDet
           </div>
 
           {/* Photo Section if exists */}
-          {signedPhotoUrl && (
-            <NotePhotoViewer signedUrl={signedPhotoUrl} title={note.title} />
+          {note.photo_path && (
+            <NotePhotoViewer photoPath={note.photo_path} title={note.title} />
           )}
         </div>
 

@@ -111,7 +111,7 @@ export async function getShoppingNoteById(
 export async function getShoppingNoteSignedUrl(
   client: SupabaseClient,
   storagePath: string,
-  expiresInSeconds = 300
+  expiresInSeconds = 3600
 ): Promise<string | null> {
   if (!client || !storagePath) return null;
 
