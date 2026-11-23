@@ -6,6 +6,7 @@ import { updateHomeVisibilitySettingsAction, type ActionResult } from "../action
 interface SettingsFormProps {
   initialShowExpenses: boolean;
   initialShowDonations?: boolean;
+  initialShowNotaBelanja?: boolean;
 }
 
 const initialState: ActionResult = {
@@ -16,6 +17,7 @@ const initialState: ActionResult = {
 export default function SettingsForm({
   initialShowExpenses,
   initialShowDonations = true,
+  initialShowNotaBelanja = true,
 }: SettingsFormProps) {
   const [state, formAction, isPending] = useActionState(
     updateHomeVisibilitySettingsAction,
@@ -117,6 +119,41 @@ export default function SettingsForm({
                 name="show_donations_on_home"
                 value="true"
                 defaultChecked={initialShowDonations}
+                disabled={isPending}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-hidden peer-focus:ring-2 peer-focus:ring-emerald-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+            </label>
+          </div>
+        </div>
+
+        {/* Pengaturan Nota Belanja Publik */}
+        <div className="pt-4 border-t border-slate-100 flex items-start justify-between gap-4">
+          <div className="space-y-1 pr-2">
+            <label
+              htmlFor="show_nota_belanja_on_public"
+              className="text-sm font-semibold text-slate-800 cursor-pointer select-none"
+            >
+              Tampilkan halaman nota belanja untuk warga
+            </label>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Jika dinonaktifkan, halaman daftar nota belanja tidak dapat diakses oleh warga umum.
+            </p>
+          </div>
+
+          <div className="flex items-center shrink-0 pt-0.5">
+            <input
+              type="hidden"
+              name="show_nota_belanja_on_public"
+              value="false"
+            />
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                id="show_nota_belanja_on_public"
+                type="checkbox"
+                name="show_nota_belanja_on_public"
+                value="true"
+                defaultChecked={initialShowNotaBelanja}
                 disabled={isPending}
                 className="sr-only peer"
               />

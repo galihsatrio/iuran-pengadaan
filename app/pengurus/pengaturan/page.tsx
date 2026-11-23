@@ -82,6 +82,7 @@ export default async function PengurusPengaturanPage() {
   const settings = await getPaymentSettings(supabase);
   const showExpenses = settings.show_expenses_on_home ?? true;
   const showDonations = settings.show_donations_on_home ?? true;
+  const showNotaBelanja = settings.show_nota_belanja_on_public ?? true;
 
   return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
@@ -98,6 +99,7 @@ export default async function PengurusPengaturanPage() {
           <SettingsForm
             initialShowExpenses={showExpenses}
             initialShowDonations={showDonations}
+            initialShowNotaBelanja={showNotaBelanja}
           />
         </section>
       </main>

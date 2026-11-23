@@ -784,7 +784,11 @@ export async function updateHomeVisibilitySettingsAction(
     };
   }
 
-  const raw: { show_expenses_on_home?: unknown; show_donations_on_home?: unknown } = {};
+  const raw: {
+    show_expenses_on_home?: unknown;
+    show_donations_on_home?: unknown;
+    show_nota_belanja_on_public?: unknown;
+  } = {};
   if (formData.has("show_expenses_on_home")) {
     const values = formData.getAll("show_expenses_on_home");
     raw.show_expenses_on_home = values[values.length - 1];
@@ -792,6 +796,10 @@ export async function updateHomeVisibilitySettingsAction(
   if (formData.has("show_donations_on_home")) {
     const values = formData.getAll("show_donations_on_home");
     raw.show_donations_on_home = values[values.length - 1];
+  }
+  if (formData.has("show_nota_belanja_on_public")) {
+    const values = formData.getAll("show_nota_belanja_on_public");
+    raw.show_nota_belanja_on_public = values[values.length - 1];
   }
 
   const validation = validateHomeVisibilitySettingsInput(raw);
@@ -828,12 +836,13 @@ export async function updateHomeVisibilitySettingsAction(
   }
 
   revalidatePath("/");
+  revalidatePath("/nota-belanja");
   revalidatePath("/pengurus");
   revalidatePath("/pengurus/pengaturan");
 
   return {
     success: true,
-    message: "Pengaturan tampilan beranda berhasil disimpan.",
+    message: "Pengaturan visibilitas berhasil disimpan.",
   };
 }
 

@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ShoppingNote, ShoppingNoteItem } from "./types";
+import type {
+  ShoppingNote,
+  ShoppingNoteItem,
+  PublicShoppingNote,
+  PublicShoppingNoteItem,
+} from "./types";
 
 export const SHOPPING_NOTE_STORAGE_BUCKET = "shopping-note-photos";
 
@@ -128,4 +133,48 @@ export async function getShoppingNoteSignedUrl(
   }
 
   return null;
+}
+
+// Fetch public shopping notes without photo_path for public warga access
+export async function getPublicShoppingNotes(
+  client?: SupabaseClient | null
+): Promise<PublicShoppingNote[]> {
+  if (!client) return [];
+  try {
+    const { data: notes, error } = await client
+      .from("public_shopping_notes")
+      .select("id, title, date, total_amount, created_at")
+      .order("date", { ascending: false })
+      .order("id", { ascending: false });
+
+    if (error || !notes || notes.length === 0) return [];
+
+    const noteIds = notes.map((n: { id: number }) => n.id);
+    const { data: items, error: itemsError } = await client
+      .from("public_shopping_note_items")
+      .select("id, note_id, item_name, item_price, sort_order")
+      .in("note_id", noteIds)
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true });
+
+    const itemsByNoteId = new Map<number, PublicShoppingNoteItem[]>();
+    if (!itemsError && items) {
+      for (const item of items as PublicShoppingNoteItem[]) {
+        if (item.note_id === undefined) continue;
+        const existing = itemsByNoteId.get(item.note_id);
+        if (existing) {
+          existing.push(item);
+        } else {
+          itemsByNoteId.set(item.note_id, [item]);
+        }
+      }
+    }
+
+    return (notes as Array<Omit<PublicShoppingNote, "items">>).map((n) => ({
+      ...n,
+      items: itemsByNoteId.get(n.id) ?? [],
+    }));
+  } catch {
+    return [];
+  }
 }

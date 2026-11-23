@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { getServerSupabase } from "@/lib/supabase/server";
+import { getServerSupabase, getPublicSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getPublicGalleryItems } from "@/lib/gallery";
+import { getPaymentSettings } from "@/lib/payment-settings";
 import type { PublicGalleryItem } from "@/lib/types";
 import GalleryView from "./gallery-view";
 
@@ -57,8 +58,11 @@ function GallerySkeleton() {
   );
 }
 
-export default function GaleriPage() {
+export default async function GaleriPage() {
   const configured = isSupabaseConfigured();
+  const supabase = getPublicSupabase();
+  const settings = configured && supabase ? await getPaymentSettings(supabase) : null;
+  const showNotaBelanja = settings?.show_nota_belanja_on_public ?? true;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
@@ -86,6 +90,14 @@ export default function GaleriPage() {
             >
               <span>Rekap Iuran</span>
             </Link>
+            {showNotaBelanja && (
+              <Link
+                href="/nota-belanja"
+                className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-[44px] text-xs sm:text-sm font-medium rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-600"
+              >
+                <span>Nota Belanja</span>
+              </Link>
+            )}
             <Link
               href="/pengurus"
               className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-[44px] text-xs sm:text-sm font-medium rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-600"

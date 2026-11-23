@@ -26,6 +26,7 @@ export interface PaymentSettings {
   account_name?: string;
   show_expenses_on_home?: boolean;
   show_donations_on_home?: boolean;
+  show_nota_belanja_on_public?: boolean;
   updated_at?: string | null;
 }
 
@@ -119,6 +120,23 @@ export interface ShoppingNoteItem {
   item_name: string;
   item_price: number;
   sort_order: number;
+}
+
+export interface PublicShoppingNoteItem {
+  id: number;
+  note_id?: number;
+  item_name: string;
+  item_price: number;
+  sort_order: number;
+}
+
+export interface PublicShoppingNote {
+  id: number;
+  title: string;
+  date: string;
+  total_amount: number;
+  created_at: string;
+  items: PublicShoppingNoteItem[];
 }
 
 

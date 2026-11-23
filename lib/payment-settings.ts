@@ -14,6 +14,7 @@ export const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
   account_name: "Kas Paguyuban Warga",
   show_expenses_on_home: true,
   show_donations_on_home: true,
+  show_nota_belanja_on_public: true,
   updated_at: null,
 };
 
@@ -27,7 +28,7 @@ export async function getPaymentSettings(
   try {
     const { data, error } = await client
       .from("payment_settings")
-      .select("qris_image_url, qris_name, nama_bendahara, no_wa_bendahara, bank_name, account_number, account_name, show_expenses_on_home, show_donations_on_home, updated_at")
+      .select("qris_image_url, qris_name, nama_bendahara, no_wa_bendahara, bank_name, account_number, account_name, show_expenses_on_home, show_donations_on_home, show_nota_belanja_on_public, updated_at")
       .eq("id", "default")
       .maybeSingle();
 
@@ -48,6 +49,10 @@ export async function getPaymentSettings(
           typeof data.show_donations_on_home === "boolean"
             ? data.show_donations_on_home
             : DEFAULT_PAYMENT_SETTINGS.show_donations_on_home,
+        show_nota_belanja_on_public:
+          typeof data.show_nota_belanja_on_public === "boolean"
+            ? data.show_nota_belanja_on_public
+            : (DEFAULT_PAYMENT_SETTINGS.show_nota_belanja_on_public ?? true),
         updated_at: data.updated_at ?? null,
       };
     }
@@ -89,6 +94,10 @@ export async function savePaymentSettings(
         updates.show_donations_on_home !== undefined
           ? updates.show_donations_on_home
           : (current.show_donations_on_home ?? DEFAULT_PAYMENT_SETTINGS.show_donations_on_home),
+      show_nota_belanja_on_public:
+        updates.show_nota_belanja_on_public !== undefined
+          ? updates.show_nota_belanja_on_public
+          : (current.show_nota_belanja_on_public ?? DEFAULT_PAYMENT_SETTINGS.show_nota_belanja_on_public ?? true),
       updated_at: new Date().toISOString(),
     };
 
@@ -99,7 +108,7 @@ export async function savePaymentSettings(
     const { data, error } = await client
       .from("payment_settings")
       .upsert(merged, { onConflict: "id" })
-      .select("qris_image_url, qris_name, nama_bendahara, no_wa_bendahara, bank_name, account_number, account_name, show_expenses_on_home, show_donations_on_home, updated_at")
+      .select("qris_image_url, qris_name, nama_bendahara, no_wa_bendahara, bank_name, account_number, account_name, show_expenses_on_home, show_donations_on_home, show_nota_belanja_on_public, updated_at")
       .single();
 
     if (error) {

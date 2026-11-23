@@ -162,6 +162,7 @@ create table if not exists public.payment_settings (
     account_name text,
     show_expenses_on_home boolean not null default true,
     show_donations_on_home boolean not null default true,
+    show_nota_belanja_on_public boolean not null default true,
     updated_at timestamptz not null default now(),
     updated_by uuid references auth.users(id)
 );
@@ -531,6 +532,32 @@ using (
         where pengurus_allowlist.user_id = auth.uid()
     )
 );
+
+-- Public view: expose shopping notes without photo_path for public warga access
+create or replace view public.public_shopping_notes as
+select
+  sn.id,
+  sn.title,
+  sn.date,
+  sn.total_amount,
+  sn.created_at
+from public.shopping_notes sn
+order by sn.date desc, sn.id desc;
+
+grant select on public.public_shopping_notes to anon, authenticated;
+
+-- Public view: expose shopping note items
+create or replace view public.public_shopping_note_items as
+select
+  sni.id,
+  sni.note_id,
+  sni.item_name,
+  sni.item_price,
+  sni.sort_order
+from public.shopping_note_items sni;
+
+grant select on public.public_shopping_note_items to anon, authenticated;
+
 
 
 

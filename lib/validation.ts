@@ -32,6 +32,7 @@ export interface HomeVisibilitySettingsValidationResult {
   sanitized?: {
     show_expenses_on_home?: boolean;
     show_donations_on_home?: boolean;
+    show_nota_belanja_on_public?: boolean;
   };
 }
 
@@ -45,9 +46,14 @@ function parseBooleanField(raw: unknown): boolean | null {
 export function validateHomeVisibilitySettingsInput(data: {
   show_expenses_on_home?: unknown;
   show_donations_on_home?: unknown;
+  show_nota_belanja_on_public?: unknown;
 }): HomeVisibilitySettingsValidationResult {
   const errors: Record<string, string> = {};
-  const sanitized: { show_expenses_on_home?: boolean; show_donations_on_home?: boolean } = {};
+  const sanitized: {
+    show_expenses_on_home?: boolean;
+    show_donations_on_home?: boolean;
+    show_nota_belanja_on_public?: boolean;
+  } = {};
 
   if (data.show_expenses_on_home !== undefined) {
     const parsed = parseBooleanField(data.show_expenses_on_home);
@@ -64,6 +70,15 @@ export function validateHomeVisibilitySettingsInput(data: {
       errors.show_donations_on_home = "Nilai pengaturan visibilitas sumbangan tidak valid.";
     } else {
       sanitized.show_donations_on_home = parsed;
+    }
+  }
+
+  if (data.show_nota_belanja_on_public !== undefined) {
+    const parsed = parseBooleanField(data.show_nota_belanja_on_public);
+    if (parsed === null) {
+      errors.show_nota_belanja_on_public = "Nilai pengaturan visibilitas nota belanja tidak valid.";
+    } else {
+      sanitized.show_nota_belanja_on_public = parsed;
     }
   }
 
