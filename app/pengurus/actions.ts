@@ -99,6 +99,7 @@ export async function createIuranRecord(
   }
 
   revalidatePath("/");
+  revalidatePath("/nota-belanja");
   revalidatePath("/pengurus");
 
   return {
@@ -1306,6 +1307,7 @@ export async function createExpenseAction(
   }
 
   revalidatePath("/");
+  revalidatePath("/nota-belanja");
   revalidatePath("/pengurus");
   revalidatePath("/pengurus/pengeluaran");
 
