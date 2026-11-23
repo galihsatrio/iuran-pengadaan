@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { getServerSupabase, getPublicSupabase } from "@/lib/supabase/server";
+import { cacheLife } from "next/cache";
+import { getPublicSupabase } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getPublicGalleryItems } from "@/lib/gallery";
-import { getPaymentSettings } from "@/lib/payment-settings";
 import type { PublicGalleryItem } from "@/lib/types";
 import GalleryView from "./gallery-view";
 
@@ -14,11 +14,13 @@ export const metadata = {
 
 // ponytail: Direct server component query wrapped in Suspense for instant public shell streaming. Upgrade to server pagination if gallery grows past 100 photos.
 async function GalleryContent() {
+  "use cache";
+  cacheLife("minutes");
   const configured = isSupabaseConfigured();
   let items: PublicGalleryItem[] = [];
 
   if (configured) {
-    const supabase = await getServerSupabase();
+    const supabase = getPublicSupabase();
     items = await getPublicGalleryItems(supabase);
   }
 
@@ -58,11 +60,9 @@ function GallerySkeleton() {
   );
 }
 
-export default async function GaleriPage() {
+export default function GaleriPage() {
   const configured = isSupabaseConfigured();
-  const supabase = getPublicSupabase();
-  const settings = configured && supabase ? await getPaymentSettings(supabase) : null;
-  const showNotaBelanja = settings?.show_nota_belanja_on_public ?? true;
+  const showNotaBelanja = true; // ponytail: nav link always shown; toggle only hides the /nota-belanja page content
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">

@@ -1614,12 +1614,8 @@ async function GalleryPreviewSection() {
   );
 }
 
-export default async function HomePage() {
+export default function HomePage() {
   const configured = isSupabaseConfigured();
-  const supabase = getPublicSupabase();
-  const settings = configured && supabase ? await getPaymentSettings(supabase) : null;
-  const showNotaBelanja = settings?.show_nota_belanja_on_public ?? true;
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
       {/* Top Navigation */}
@@ -1639,14 +1635,12 @@ export default async function HomePage() {
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {showNotaBelanja && (
-              <Link
+            <Link
                 href="/nota-belanja"
                 className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-[44px] text-xs sm:text-sm font-medium rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-600 shrink-0"
               >
                 <span>Nota Belanja</span>
               </Link>
-            )}
             <Link
               href="/galeri"
               className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 sm:py-2.5 min-h-[44px] text-xs sm:text-sm font-medium rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-600 shrink-0"
