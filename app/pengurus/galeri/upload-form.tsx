@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useState, useEffect } from "react";
+import { useActionState, useRef, useState, useEffect, useTransition } from "react";
 import { uploadGalleryPhotoAction, type ActionResult } from "../actions";
 import { compressImage } from "@/lib/compress-image";
 
@@ -14,18 +14,20 @@ export default function GalleryUploadForm() {
     uploadGalleryPhotoAction,
     initialState
   );
+  const [, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const isReadyToSubmitRef = useRef(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
 
   useEffect(() => {
     if (state.success && formRef.current) {
       formRef.current.reset();
       setSelectedFile(null);
       setPreviewUrl(null);
+      setImageError(null);
     }
   }, [state.success]);
 
@@ -43,6 +45,9 @@ export default function GalleryUploadForm() {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] || null;
     setSelectedFile(file);
+    if (file) {
+      setImageError(null);
+    }
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
     }
@@ -54,46 +59,44 @@ export default function GalleryUploadForm() {
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    if (isReadyToSubmitRef.current) {
-      isReadyToSubmitRef.current = false;
-      return;
-    }
+    e.preventDefault();
 
     const file = imageInputRef.current?.files?.[0] || selectedFile;
     if (!file) {
+      setImageError("Silakan pilih gambar");
       return;
     }
 
-    e.preventDefault();
+    setImageError(null);
     setIsCompressing(true);
 
+    let finalFile = file;
     try {
       const compressed = await compressImage(file, 1920, 0.82);
       const newName = file.name.includes(".")
         ? file.name.replace(/\.[^.]+$/, ".jpg")
         : `${file.name}.jpg`;
-      const compressedFile = new File([compressed], newName, {
+      finalFile = new File([compressed], newName, {
         type: "image/jpeg",
       });
-
-      const dt = new DataTransfer();
-      dt.items.add(compressedFile);
-      if (imageInputRef.current) {
-        imageInputRef.current.files = dt.files;
-      }
-      setSelectedFile(compressedFile);
+      setSelectedFile(finalFile);
       if (previewUrl) {
         URL.revokeObjectURL(previewUrl);
       }
-      setPreviewUrl(URL.createObjectURL(compressedFile));
+      setPreviewUrl(URL.createObjectURL(finalFile));
     } catch {
       // compression failed — submit original
     } finally {
       setIsCompressing(false);
     }
 
-    isReadyToSubmitRef.current = true;
-    formRef.current?.requestSubmit();
+    const form = formRef.current!;
+    const fd = new FormData(form);
+    fd.set("image", finalFile);
+
+    startTransition(() => {
+      formAction(fd);
+    });
   }
 
   return (
@@ -120,7 +123,7 @@ export default function GalleryUploadForm() {
         </div>
       )}
 
-      <form ref={formRef} action={formAction} onSubmit={handleSubmit} className="space-y-4">
+      <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
         {/* Judul Foto */}
         <div>
           <label htmlFor="title" className="block text-xs sm:text-sm font-semibold text-slate-700 mb-1">
@@ -219,7 +222,6 @@ export default function GalleryUploadForm() {
             name="image"
             type="file"
             accept="image/png,image/jpeg,image/webp"
-            required
             disabled={isPending || isCompressing}
             onChange={handleFileChange}
             className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer border border-slate-200 rounded-lg p-1 bg-white focus-visible:outline-2 focus-visible:outline-emerald-600"
@@ -227,8 +229,8 @@ export default function GalleryUploadForm() {
           <p className="mt-1 text-[11px] text-slate-500">
             Format: PNG, JPG, WEBP. Foto akan dikompresi otomatis sebelum diunggah. (Pengguna iPhone: pilih dari Galeri, bukan kamera langsung)
           </p>
-          {state.errors?.image && (
-            <p className="mt-1 text-xs text-rose-600">{state.errors.image}</p>
+          {(imageError || state.errors?.image) && (
+            <p className="mt-1 text-xs text-rose-600">{imageError || state.errors?.image}</p>
           )}
 
           {displayPreview && (
